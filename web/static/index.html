@@ -505,6 +505,7 @@ hr { border: none; border-top: 2px solid var(--gb-border); margin: 22px 0; }
          style="width:14px;height:14px;image-rendering:pixelated;vertical-align:middle;margin-right:5px;opacity:.55">
     ALERTS<span id="alert-badge"></span>
   </button>
+  <button onclick="showTab('notify')">NOTIFY</button>
   <button onclick="showTab('settings')">SETTINGS</button>
 </nav>
 
@@ -635,6 +636,51 @@ hr { border: none; border-top: 2px solid var(--gb-border); margin: 22px 0; }
   </div>
 </section>
 
+<!-- ══════════════════ NOTIFICATION CENTER ══════════════════ -->
+<section id="tab-notify">
+  <div class="sec-head"><h2>NOTIFICATION CENTER</h2></div>
+
+  <!-- Twilio status card -->
+  <div class="settings-card" style="margin-bottom:22px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <div id="twilio-dot" class="dot"></div>
+      <span id="twilio-label" style="font-family:var(--px);font-size:8px">CHECKING…</span>
+    </div>
+    <p class="desc">
+      Twilio sends the texts. Add your Account SID, Auth Token, and
+      From number in <strong>Settings → .env</strong>, then enter recipient
+      numbers below and flip SMS on.
+    </p>
+  </div>
+
+  <!-- SMS master toggle -->
+  <div style="display:flex;align-items:center;gap:18px;margin-bottom:26px">
+    <span style="font-family:var(--px);font-size:9px;color:var(--gb-dim)">SMS ALERTS</span>
+    <button id="sms-toggle" class="btn" onclick="toggleSMS()">OFF</button>
+  </div>
+
+  <!-- Recipients -->
+  <p class="sub-label">— RECIPIENTS —</p>
+  <div id="recipient-list" style="margin-bottom:14px"></div>
+
+  <!-- Add number -->
+  <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:26px;flex-wrap:wrap">
+    <div class="fg" style="flex:1;min-width:180px;max-width:260px">
+      <label>PHONE NUMBER (E.164)</label>
+      <input id="new-number" placeholder="+12125551234" maxlength="16"
+             onkeydown="if(event.key==='Enter')addRecipient()">
+    </div>
+    <button class="btn green" onclick="addRecipient()">+ ADD</button>
+  </div>
+
+  <!-- Test button -->
+  <button class="btn" onclick="testSMS()">SEND TEST TEXT</button>
+  <p class="desc" style="margin-top:10px">
+    Sends a test message to every number in the list above.
+    Requires Twilio credentials and at least one recipient.
+  </p>
+</section>
+
 <!-- ══════════════════ SETTINGS ══════════════════ -->
 <section id="tab-settings">
   <div class="sec-head"><h2>SETTINGS</h2></div>
@@ -753,10 +799,11 @@ function showTab(name) {
   document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  ['dashboard','watchlist','alerts','settings'].forEach((t,i) => {
+  ['dashboard','watchlist','alerts','notify','settings'].forEach((t,i) => {
     if (t === name) document.querySelectorAll('nav button')[i].classList.add('active');
   });
   if (name === 'alerts') { S.newAlerts = 0; renderAlertBadge(); }
+  if (name === 'notify')  loadNotifications();
 }
 
 // ─── Header sync ──────────────────────────────────────
@@ -1073,6 +1120,64 @@ async function loadAlerts()    { try{ localAlerts=await api('GET','/api/alerts')
 async function loadWatchlist() { try{ watchlistItems=await api('GET','/api/watchlist'); renderWatchlist(); }catch(_){} }
 async function loadSettings()  { try{ const d=await api('GET','/api/settings'); setKeyStatus(d.bby_key_set); }catch(_){} }
 
+// ─── Notification Center ──────────────────────────────
+let NC = { sms_enabled: false, recipients: [], twilio_ready: false };
+
+async function loadNotifications() {
+  try { NC = await api('GET','/api/notifications'); renderNC(); } catch(_){}
+}
+function renderNC() {
+  document.getElementById('twilio-dot').className = 'dot'+(NC.twilio_ready?' set':'');
+  document.getElementById('twilio-label').textContent = NC.twilio_ready
+    ? 'TWILIO CONFIGURED' : 'TWILIO NOT SET — ADD CREDENTIALS IN SETTINGS';
+  const btn = document.getElementById('sms-toggle');
+  btn.textContent = NC.sms_enabled ? 'ON' : 'OFF';
+  btn.className   = 'btn'+(NC.sms_enabled?' green':'');
+  const list = document.getElementById('recipient-list');
+  if (!NC.recipients.length) {
+    list.innerHTML = '<p style="color:var(--gb-dim);font-size:11px;margin-bottom:6px">No numbers yet.</p>';
+  } else {
+    list.innerHTML = NC.recipients.map(n=>`
+      <div class="wl-card" style="margin-bottom:8px">
+        <div style="flex:1;font-size:13px">${esc(n)}</div>
+        <button class="btn red" style="font-size:7px;padding:5px 10px"
+          onclick="removeRecipient('${esc(n)}')">REMOVE</button>
+      </div>`).join('');
+  }
+}
+async function _saveNC(patch) {
+  NC = await api('POST','/api/notifications',{...NC,...patch}); renderNC();
+}
+async function toggleSMS() {
+  try { await _saveNC({sms_enabled:!NC.sms_enabled}); }
+  catch(e){toast('ERROR: '+e.message);}
+}
+async function addRecipient() {
+  const num = document.getElementById('new-number').value.trim();
+  if (!num)              { toast('ENTER A NUMBER'); return; }
+  if (!num.startsWith('+')) { toast('USE E.164 FORMAT  e.g. +12125551234'); return; }
+  if (NC.recipients.includes(num)) { toast('ALREADY IN LIST'); return; }
+  try {
+    await _saveNC({recipients:[...NC.recipients, num]});
+    document.getElementById('new-number').value='';
+    toast(num+' ADDED');
+  } catch(e){toast('ERROR: '+e.message);}
+}
+async function removeRecipient(num) {
+  try {
+    await _saveNC({recipients:NC.recipients.filter(n=>n!==num)});
+    toast(num+' REMOVED');
+  } catch(e){toast('ERROR: '+e.message);}
+}
+async function testSMS() {
+  if (!NC.twilio_ready)     { toast('CONFIGURE TWILIO FIRST — SEE SETTINGS'); return; }
+  if (!NC.recipients.length){ toast('ADD A NUMBER FIRST'); return; }
+  try {
+    const r = await api('POST','/api/notifications/test');
+    toast('TEST SENT: '+r.sent+' OK / '+r.failed+' FAILED');
+  } catch(e){toast('ERROR: '+e.message);}
+}
+
 // ─── SSE ──────────────────────────────────────────────
 let sse=null;
 function connectSSE() {
@@ -1091,7 +1196,7 @@ function connectSSE() {
 setInterval(renderTable, 20000);
 
 (async()=>{
-  await Promise.all([loadStatus(),loadAlerts(),loadWatchlist(),loadSettings()]);
+  await Promise.all([loadStatus(),loadAlerts(),loadWatchlist(),loadSettings(),loadNotifications()]);
   connectSSE();
 })();
 </script>

@@ -23,10 +23,11 @@ from platformdirs import user_data_dir
 
 APP_DATA_DIR: Path = Path(user_data_dir("Pokepad", "Pokepad"))
 
-ENV_PATH:       Path = APP_DATA_DIR / ".env"
-WATCHLIST_PATH: Path = APP_DATA_DIR / "watchlist.json"
-STATUS_PATH:    Path = APP_DATA_DIR / "status.json"
-LOG_PATH:       Path = APP_DATA_DIR / "monitor.log"
+ENV_PATH:            Path = APP_DATA_DIR / ".env"
+WATCHLIST_PATH:      Path = APP_DATA_DIR / "watchlist.json"
+NOTIFICATIONS_PATH:  Path = APP_DATA_DIR / "notifications.json"
+STATUS_PATH:         Path = APP_DATA_DIR / "status.json"
+LOG_PATH:            Path = APP_DATA_DIR / "monitor.log"
 
 # ── Read-only bundled assets ──────────────────────────────────────────────────
 # PyInstaller extracts ("web/static", "web/static") into _MEIPASS.

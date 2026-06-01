@@ -26,6 +26,7 @@ from core.status import StatusBoard
 from web import store
 from web.demo import DemoRunner
 from web.events import bus
+from web import notifications as notif_store
 from web.paths import APP_DATA_DIR, ENV_PATH, SEEDS_PATH, STATIC_DIR, STATUS_PATH
 from web.runner import MonitorRunner
 
@@ -188,6 +189,57 @@ def stop_demo():
 @app.get("/api/alerts")
 def get_alerts():
     return bus.alert_history()
+
+
+# ── Notification Center ───────────────────────────────────────────────────────
+
+def _twilio_ready() -> bool:
+    return all(os.getenv(k) for k in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM"))
+
+
+class NotifConfig(BaseModel):
+    sms_enabled: bool = False
+    recipients: list = []
+
+
+@app.get("/api/notifications")
+def get_notifications():
+    data = notif_store.load()
+    return {**data, "twilio_ready": _twilio_ready()}
+
+
+@app.post("/api/notifications")
+def save_notifications(body: NotifConfig):
+    saved = notif_store.save(body.model_dump())
+    return {**saved, "twilio_ready": _twilio_ready()}
+
+
+@app.post("/api/notifications/test")
+async def test_notifications():
+    if not _twilio_ready():
+        raise HTTPException(400, "Twilio credentials not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM in Settings")
+    config = notif_store.load()
+    recipients = config.get("recipients", [])
+    if not recipients:
+        raise HTTPException(400, "No recipients — add a phone number first")
+
+    import httpx as _httpx
+    sid   = os.getenv("TWILIO_ACCOUNT_SID")
+    token = os.getenv("TWILIO_AUTH_TOKEN")
+    from_ = os.getenv("TWILIO_FROM")
+    body  = "Test from Pokepad restock monitor — SMS alerts are working!"
+    url   = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+
+    sent = failed = 0
+    async with _httpx.AsyncClient(timeout=10) as client:
+        for to in recipients:
+            try:
+                r = await client.post(url, auth=(sid, token), data={"From": from_, "To": to, "Body": body})
+                r.raise_for_status()
+                sent += 1
+            except Exception:
+                failed += 1
+    return {"sent": sent, "failed": failed}
 
 
 # ── Settings ─────────────────────────────────────────────────────────────────

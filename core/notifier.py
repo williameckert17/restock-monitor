@@ -57,6 +57,20 @@ def _active_channels() -> set:
     return {c.strip().lower() for c in raw.split(",") if c.strip()}
 
 
+def _notif_center_config() -> dict:
+    """Read Notification Center settings without importing web (avoids circular deps)."""
+    try:
+        from pathlib import Path
+        from platformdirs import user_data_dir
+        p = Path(user_data_dir("Pokepad", "Pokepad")) / "notifications.json"
+        if p.exists():
+            import json
+            return json.loads(p.read_text())
+    except Exception:
+        pass
+    return {}
+
+
 def _price_str(price: Optional[str]) -> str:
     return f" ({price})" if price else ""
 
@@ -80,8 +94,13 @@ async def notify(config: SiteConfig, price: Optional[str] = None) -> None:
         tasks.append(_send_discord(config, price))
     if "pushover" in channels:
         tasks.append(_send_pushover(config, price))
-    if "twilio" in channels:
+
+    # SMS fires if explicitly listed in NOTIFY_CHANNELS *or* enabled in the
+    # Notification Center UI (either source is sufficient).
+    nc = _notif_center_config()
+    if "twilio" in channels or (nc.get("sms_enabled") and nc.get("recipients")):
         tasks.append(_send_twilio(config, price))
+
     if "email" in channels:
         tasks.append(asyncio.to_thread(_send_email, config, price))
     if "browser" in channels or os.getenv("OPEN_BROWSER", "0").lower() in ("1", "true", "yes"):
@@ -167,17 +186,19 @@ async def _send_twilio(config: SiteConfig, price: Optional[str]) -> None:
     sid   = os.getenv("TWILIO_ACCOUNT_SID", "")
     token = os.getenv("TWILIO_AUTH_TOKEN", "")
     from_ = os.getenv("TWILIO_FROM", "")
-    to_raw = os.getenv("TWILIO_TO", "")
-    if not all([sid, token, from_, to_raw]):
-        log.warning(
-            "[%s] twilio channel active but one or more of "
-            "TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM / TWILIO_TO not set",
-            config.name,
-        )
+    if not all([sid, token, from_]):
+        log.warning("[%s] twilio: TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM not set", config.name)
         return
 
-    # TWILIO_TO supports comma-separated numbers for multi-recipient alerts.
-    recipients = [n.strip() for n in to_raw.split(",") if n.strip()]
+    # Merge Notification Center UI recipients + TWILIO_TO env var (deduplicated).
+    nc = _notif_center_config()
+    ui_recipients = nc.get("recipients", []) if nc.get("sms_enabled") else []
+    env_recipients = [n.strip() for n in os.getenv("TWILIO_TO", "").split(",") if n.strip()]
+    recipients = list(dict.fromkeys(ui_recipients + env_recipients))  # preserve order, dedup
+
+    if not recipients:
+        log.warning("[%s] twilio: no recipients — add a number in Notification Center or set TWILIO_TO", config.name)
+        return
 
     price_note = f" ({price})" if price else ""
     body = (
