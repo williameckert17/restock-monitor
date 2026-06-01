@@ -221,9 +221,45 @@ Requires macOS for `.icns` (uses the built-in `iconutil`). The `.ico` and `.png`
 
 ### Building a native app (PyInstaller)
 
+PyInstaller **does not support cross-compilation** — you must build on the OS you are targeting. Run the build once on macOS and once on Windows to produce both artefacts.
+
+**Install the build tool (one-time, any OS):**
+
 ```bash
 pip install pyinstaller
-pyinstaller pokepad.spec
-# → dist/Pokepad.app  (macOS)
-# → dist/Pokepad.exe  (Windows — change icon= in pokepad.spec to pokepad.ico first)
 ```
+
+**macOS → `dist/Pokepad.app`:**
+
+```bash
+python scripts/build.py
+# or, to wipe previous artefacts first:
+python scripts/build.py --clean
+```
+
+**Windows → `dist/Pokepad.exe`:**
+
+```powershell
+python scripts\build.py
+# or with a clean slate:
+python scripts\build.py --clean
+```
+
+The build script calls `pyinstaller pokepad.spec` for you and reports the output path. You can also invoke PyInstaller directly if you prefer:
+
+```bash
+pyinstaller pokepad.spec
+```
+
+**What gets bundled:**
+
+| Source | Bundle destination |
+|---|---|
+| `web/static/` | `web/static/` inside the bundle — served by FastAPI |
+| `sites/*.toml` | `sites/` — example configs bundled as read-only reference |
+| `.env.example` | bundle root |
+| Python deps | compiled into the PYZ archive |
+
+User data (`.env`, watchlist, logs) is **never** stored inside the bundle. It goes to the OS per-user app-data directory (`~/Library/Application Support/Pokepad` on macOS, `%APPDATA%\Pokepad\Pokepad` on Windows).
+
+**Code-signing note:** The `.app` produced on macOS is unsigned. To distribute it outside the App Store you will need to sign and notarise it with an Apple Developer certificate. The spec has empty `codesign_identity` and `entitlements_file` fields ready for you to fill in.
