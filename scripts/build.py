@@ -39,7 +39,13 @@ def main() -> None:
                 print(f"  Removing {target}")
                 shutil.rmtree(target)
 
-    if not shutil.which("pyinstaller"):
+    # Prefer the module invocation so it works even when the pyinstaller
+    # script isn't on PATH (e.g. pip installed without --user bin in PATH).
+    ok = subprocess.run(
+        [sys.executable, "-m", "PyInstaller", "--version"],
+        capture_output=True,
+    ).returncode == 0
+    if not ok:
         sys.exit(
             "\npyinstaller not found.\n"
             "Install it first:  pip install pyinstaller\n"
