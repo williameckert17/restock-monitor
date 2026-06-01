@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restock Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════
+   GAME BOY PALETTE
+   ═══════════════════════════════════════════════════════ */
+:root {
+  --gb-screen:  #0d1a06;   /* main background — screen off */
+  --gb-panel:   #152408;   /* card / panel background */
+  --gb-raised:  #1e3410;   /* slightly lifted surface */
+  --gb-border:  #2d5410;   /* standard border */
+  --gb-active:  #3a6e14;   /* selected / hover */
+  --gb-text:    #a8d020;   /* primary text — classic GB green */
+  --gb-dim:     #4e7818;   /* dimmed / muted text */
+  --gb-bright:  #c0f040;   /* bright highlight */
+  --gb-in:      #70e030;   /* in-stock */
+  --gb-out:     #4e7818;   /* out-of-stock */
+  --gb-block:   #d0a010;   /* blocked / warning */
+  --gb-err:     #c84820;   /* error / danger */
+  --gb-await:   #20b888;   /* awaiting key */
+  --gb-demo:    #d0a010;   /* demo accent */
+  --gb-white:   #d0e890;   /* near-white for emphasis */
+  --px: 'Press Start 2P', monospace;
+  --mono: 'SF Mono', 'Fira Mono', 'Consolas', monospace;
+}
+
+*  { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: var(--gb-screen);
+  color: var(--gb-text);
+  font-family: var(--mono);
+  font-size: 13px;
+  min-height: 100vh;
+  /* subtle scanline texture */
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,.18) 2px,
+    rgba(0,0,0,.18) 4px
+  );
+}
+
+/* ── Header ──────────────────────────────────────────── */
+header {
+  background: var(--gb-panel);
+  border-bottom: 3px solid var(--gb-border);
+  padding: 10px 22px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.app-name {
+  font-family: var(--px);
+  font-size: 11px;
+  color: var(--gb-bright);
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px rgba(192,240,64,.4);
+}
+.hdr-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--gb-dim);
+  flex-shrink: 0;
+}
+.hdr-dot.running { background: var(--gb-in);    animation: blink 1.4s infinite; }
+.hdr-dot.demo    { background: var(--gb-demo);  animation: blink 1.4s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+#status-label { font-size: 10px; color: var(--gb-dim); font-family: var(--px); }
+#demo-pill {
+  display: none;
+  font-family: var(--px);
+  font-size: 8px;
+  padding: 3px 8px;
+  border: 2px solid var(--gb-demo);
+  color: var(--gb-demo);
+  letter-spacing: 1px;
+}
+
+/* ── Demo banner ─────────────────────────────────────── */
+#demo-banner {
+  display: none;
+  background: rgba(208,160,16,.12);
+  border-bottom: 2px solid rgba(208,160,16,.5);
+  padding: 7px 22px;
+  font-family: var(--px);
+  font-size: 8px;
+  color: var(--gb-demo);
+  text-align: center;
+  letter-spacing: .5px;
+  line-height: 1.8;
+}
+#demo-banner.on { display: block; }
+
+/* ── Nav ─────────────────────────────────────────────── */
+nav {
+  display: flex;
+  background: var(--gb-panel);
+  border-bottom: 3px solid var(--gb-border);
+  padding: 0 22px;
+  gap: 2px;
+}
+nav button {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -3px;
+  color: var(--gb-dim);
+  padding: 10px 14px;
+  cursor: pointer;
+  font-family: var(--px);
+  font-size: 8px;
+  letter-spacing: .5px;
+  transition: color .1s;
+  position: relative;
+}
+nav button:hover { color: var(--gb-text); }
+nav button.active { color: var(--gb-bright); border-bottom-color: var(--gb-bright); }
+#alert-badge {
+  display: none;
+  position: absolute;
+  top: 5px; right: 2px;
+  background: var(--gb-err);
+  color: #fff;
+  font-family: var(--px);
+  font-size: 7px;
+  padding: 2px 5px;
+}
+
+/* ── Main ────────────────────────────────────────────── */
+/* ── Page layout: content + sprite column ────────── */
+#page-layout {
+  display: flex;
+  align-items: flex-start;
+}
+main {
+  flex: 1 1 0;
+  padding: 22px;
+  max-width: 1060px;
+  min-width: 0;
+}
+#sprite-panel {
+  flex: 0 0 auto;
+  width: clamp(110px, 14vw, 210px);
+  position: sticky;
+  top: 0;
+  height: calc(100vh - 90px); /* header + nav */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-left: 2px solid var(--gb-border);
+  background: var(--gb-screen); /* clear — matches page bg exactly */
+  overflow: hidden;
+}
+/* Panel sprite — swaps based on monitor state, fades between transitions */
+#page-sprite {
+  width: 90%;
+  max-width: 260px;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 0 10px rgba(168, 208, 32, 0.20));
+  transition: opacity 0.25s ease;
+}
+/* Empty-state sprite illustration */
+.empty-sprite {
+  display: block;
+  width: 72px;
+  height: auto;
+  margin: 0 auto 14px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 0 6px rgba(168, 208, 32, 0.18));
+  opacity: .9;
+}
+/* Fix centering: use fixed positioning so it's always mid-viewport */
+#sprite-panel {
+  position: fixed !important;
+  right: 0;
+  top: 88px;      /* header ~44px + nav ~44px */
+  height: calc(100vh - 88px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+@media (max-width: 700px) { #sprite-panel { display: none; } }
+/* Push main content left so it doesn't slide under the fixed sprite panel */
+#page-layout { padding-right: clamp(110px, 14vw, 210px); }
+/* Ultra Ball nav icon — brightens when there are new alerts */
+#nav-ball.has-alerts {
+  opacity: 1;
+  animation: blink .9s step-end infinite;
+  filter: drop-shadow(0 0 4px rgba(255,200,0,.7));
+}
+section { display: none; }
+section.active { display: block; }
+
+/* ── Pixel buttons ───────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-family: var(--px);
+  font-size: 8px;
+  letter-spacing: .5px;
+  cursor: pointer;
+  border: 2px solid var(--gb-border);
+  background: var(--gb-raised);
+  color: var(--gb-text);
+  transition: background .1s, border-color .1s;
+  /* pixel shadow */
+  box-shadow: 2px 2px 0 var(--gb-border);
+}
+.btn:hover { background: var(--gb-active); border-color: var(--gb-text); box-shadow: 2px 2px 0 var(--gb-text); }
+.btn:active { transform: translate(2px,2px); box-shadow: none; }
+.btn:disabled { opacity: .3; cursor: not-allowed; pointer-events: none; }
+.btn.green { border-color: var(--gb-in); color: var(--gb-in); box-shadow: 2px 2px 0 var(--gb-in); }
+.btn.green:hover { background: rgba(112,224,48,.15); }
+.btn.red   { border-color: var(--gb-err); color: var(--gb-err); box-shadow: 2px 2px 0 var(--gb-err); }
+.btn.red:hover { background: rgba(200,72,32,.15); }
+.btn.demo-btn { border-color: var(--gb-demo); color: var(--gb-demo); box-shadow: 2px 2px 0 var(--gb-demo); }
+.btn.demo-btn:hover { background: rgba(208,160,16,.15); }
+.btn.demo-btn.active-demo { background: rgba(208,160,16,.2); }
+
+/* ── Controls bar ────────────────────────────────────── */
+.controls { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.controls .spacer { flex: 1; }
+.controls .info { font-size: 9px; color: var(--gb-dim); font-family: var(--px); }
+
+/* ── Table ───────────────────────────────────────────── */
+.tbl-wrap {
+  border: 2px solid var(--gb-border);
+  box-shadow: 3px 3px 0 var(--gb-border);
+}
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th {
+  background: var(--gb-raised);
+  padding: 8px 14px;
+  text-align: left;
+  color: var(--gb-dim);
+  font-family: var(--px);
+  font-size: 8px;
+  letter-spacing: .5px;
+  border-bottom: 2px solid var(--gb-border);
+  white-space: nowrap;
+}
+td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gb-border);
+  vertical-align: middle;
+  font-family: var(--mono);
+}
+tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: rgba(255,255,255,.03); }
+.empty-msg td {
+  text-align: center;
+  color: var(--gb-dim);
+  padding: 40px;
+  font-family: var(--px);
+  font-size: 8px;
+  line-height: 2;
+}
+
+/* ── Status badges ───────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  font-family: var(--px);
+  font-size: 7px;
+  letter-spacing: .5px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.b-in      { color: var(--gb-in);    border-color: var(--gb-in);    background: rgba(112,224,48,.12); }
+.b-out     { color: var(--gb-out);   border-color: var(--gb-out);   background: transparent; }
+.b-blocked { color: var(--gb-block); border-color: var(--gb-block); background: rgba(208,160,16,.12); }
+.b-error   { color: var(--gb-err);   border-color: var(--gb-err);   background: rgba(200,72,32,.12); }
+.b-await   { color: var(--gb-await); border-color: var(--gb-await); background: rgba(32,184,136,.12); }
+.b-unknown { color: var(--gb-dim);   border-color: var(--gb-dim);   background: transparent; }
+.b-demo    { color: var(--gb-demo);  border-color: var(--gb-demo);  background: rgba(208,160,16,.1); font-size: 7px; margin-left: 5px; padding: 2px 6px; }
+
+/* ═══════════════════════════════════════════════════════
+   GAME BOY DIALOGUE BOX  (alert cards)
+   ═══════════════════════════════════════════════════════ */
+.dialog-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--gb-panel);
+  border: 3px solid var(--gb-text);
+  /* chunky pixel-corner shadow */
+  box-shadow: 4px 4px 0 var(--gb-border), 6px 6px 0 rgba(0,0,0,.4);
+  padding: 12px 16px;
+  position: relative;
+}
+/* triangle "continue" indicator in the bottom-right corner */
+.dialog-box::after {
+  content: '▼';
+  position: absolute;
+  bottom: 8px; right: 12px;
+  font-size: 10px;
+  color: var(--gb-dim);
+  animation: blink 1s step-end infinite;
+}
+.dialog-box.demo-dialog { border-color: var(--gb-demo); }
+.dialog-box.demo-dialog::after { color: var(--gb-demo); }
+
+/* ── Sprite ── */
+.dialog-sprite {
+  width: 44px;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges; /* Firefox */
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* ── Dialog text ── */
+.dialog-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.dialog-product {
+  font-family: var(--px);
+  font-size: 9px;
+  color: var(--gb-bright);
+  letter-spacing: .5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 20px; /* space for ▼ */
+}
+.dialog-meta {
+  font-size: 11px;
+  color: var(--gb-text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dialog-price {
+  font-family: var(--px);
+  font-size: 9px;
+  color: var(--gb-in);
+}
+.dialog-time  { font-size: 10px; color: var(--gb-dim); }
+.dialog-link a { color: var(--gb-await); font-size: 10px; text-decoration: none; }
+.dialog-link a:hover { text-decoration: underline; }
+
+.dialog-list { display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Watchlist cards ─────────────────────────────────── */
+.wl-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--gb-panel);
+  border: 2px solid var(--gb-border);
+  box-shadow: 2px 2px 0 var(--gb-border);
+  padding: 10px 14px;
+}
+.wl-name    { font-family: var(--px); font-size: 9px; color: var(--gb-bright); }
+.wl-meta    { font-size: 11px; color: var(--gb-dim); margin-top: 4px; }
+
+/* ── Forms ───────────────────────────────────────────── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 580px; }
+.fg { display: flex; flex-direction: column; gap: 5px; }
+.fg.full { grid-column: 1/-1; }
+.fg label { font-family: var(--px); font-size: 8px; color: var(--gb-dim); letter-spacing: .5px; }
+input, select {
+  background: var(--gb-screen);
+  border: 2px solid var(--gb-border);
+  color: var(--gb-text);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-family: var(--mono);
+  outline: none;
+  width: 100%;
+}
+input:focus, select:focus { border-color: var(--gb-text); }
+input::placeholder { color: var(--gb-dim); }
+select option { background: var(--gb-screen); }
+
+/* ── Settings card ───────────────────────────────────── */
+.settings-card {
+  background: var(--gb-panel);
+  border: 2px solid var(--gb-border);
+  box-shadow: 3px 3px 0 var(--gb-border);
+  padding: 22px;
+  max-width: 460px;
+}
+.settings-card h3 {
+  font-family: var(--px);
+  font-size: 10px;
+  color: var(--gb-bright);
+  margin-bottom: 10px;
+  letter-spacing: .5px;
+}
+.settings-card .desc { font-size: 11px; color: var(--gb-dim); margin-bottom: 16px; line-height: 1.7; }
+.key-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 10px; color: var(--gb-dim); }
+.key-row .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gb-dim); }
+.key-row .dot.set { background: var(--gb-in); }
+
+/* ── Section headers ─────────────────────────────────── */
+.sec-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.sec-head h2 { font-family: var(--px); font-size: 11px; color: var(--gb-bright); letter-spacing: 1px; }
+hr { border: none; border-top: 2px solid var(--gb-border); margin: 22px 0; }
+.sub-label {
+  font-family: var(--px);
+  font-size: 8px;
+  color: var(--gb-dim);
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+  text-transform: uppercase;
+}
+
+/* ── Empty states ────────────────────────────────────── */
+.empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--gb-dim);
+  font-family: var(--px);
+  font-size: 8px;
+  line-height: 2.4;
+}
+.empty strong { display: block; color: var(--gb-text); margin-bottom: 6px; }
+
+/* ── Toast ───────────────────────────────────────────── */
+#toast {
+  position: fixed;
+  bottom: 22px; right: 22px;
+  background: var(--gb-panel);
+  border: 2px solid var(--gb-text);
+  box-shadow: 3px 3px 0 var(--gb-border);
+  padding: 10px 16px;
+  font-family: var(--px);
+  font-size: 8px;
+  color: var(--gb-text);
+  line-height: 1.8;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: all .2s;
+  pointer-events: none;
+  z-index: 999;
+  max-width: 280px;
+}
+#toast.show { opacity: 1; transform: translateY(0); }
+#toast.t-restock { border-color: var(--gb-in); color: var(--gb-in); }
+#toast.t-demo    { border-color: var(--gb-demo); color: var(--gb-demo); }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="app-name">RESTOCK-MON</span>
+  <span class="hdr-dot" id="hdr-dot"></span>
+  <span id="status-label">IDLE</span>
+  <span id="demo-pill">DEMO</span>
+</header>
+
+<div id="demo-banner" class="">
+  *** DEMO MODE *** SIMULATED DATA ONLY — NO REAL RETAILERS CONTACTED ***
+  &nbsp;&nbsp;<button class="btn demo-btn" style="padding:3px 9px;font-size:7px;vertical-align:middle" onclick="stopAll()">STOP</button>
+</div>
+
+<nav>
+  <button class="active" onclick="showTab('dashboard')">DASHBOARD</button>
+  <button onclick="showTab('watchlist')">WATCHLIST</button>
+<button onclick="showTab('alerts')" style="position:relative">
+    <img id="nav-ball"
+         src="/static/sprites/ultraball.png"
+         alt="" aria-hidden="true"
+         style="width:14px;height:14px;image-rendering:pixelated;vertical-align:middle;margin-right:5px;opacity:.55">
+    ALERTS<span id="alert-badge"></span>
+  </button>
+  <button onclick="showTab('settings')">SETTINGS</button>
+</nav>
+
+<div id="page-layout">
+<main>
+
+<!-- ══════════════════ DASHBOARD ══════════════════ -->
+<section id="tab-dashboard" class="active">
+  <div class="controls">
+    <button class="btn green" id="btn-start" onclick="startMonitor()">▶ START</button>
+    <button class="btn red"   id="btn-stop"  onclick="stopAll()" disabled>■ STOP</button>
+    <button class="btn demo-btn" id="btn-demo" onclick="toggleDemo()">🎮 DEMO</button>
+    <div class="spacer"></div>
+    <span class="info" id="site-count"></span>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>SITE</th>
+          <th>PRODUCT</th>
+          <th>STATUS</th>
+          <th>PRICE</th>
+          <th>LAST CHK</th>
+          <th style="text-align:right">POLLS</th>
+        </tr>
+      </thead>
+      <tbody id="status-tbody">
+        <tr class="empty-msg"><td colspan="6">NO SITES MONITORED<br>START THE MONITOR OR TRY DEMO MODE</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════════════ WATCHLIST ══════════════════ -->
+<section id="tab-watchlist">
+  <div class="sec-head"><h2>WATCHLIST</h2></div>
+
+  <div style="margin-bottom:24px">
+    <p class="sub-label">— ADD PRODUCT —</p>
+    <div class="form-grid">
+      <div class="fg">
+        <label>RETAILER NAME *</label>
+        <input id="wl-name" placeholder="Best Buy" maxlength="60">
+      </div>
+      <div class="fg">
+        <label>PRODUCT NAME *</label>
+        <input id="wl-product" placeholder="RTX 5090" maxlength="80">
+      </div>
+      <div class="fg full">
+        <label>URL *</label>
+        <input id="wl-url" type="url" placeholder="https://...">
+      </div>
+      <div class="fg">
+        <label>DETECTION TYPE</label>
+        <select id="wl-type" onchange="onTypeChange()">
+          <option value="css">CSS (HTML page)</option>
+          <option value="json">JSON API</option>
+          <option value="rss">RSS / Atom feed</option>
+          <option value="bestbuy">Best Buy API</option>
+        </select>
+      </div>
+      <div class="fg" id="fg-sku" style="display:none">
+        <label>BEST BUY SKU</label>
+        <input id="wl-sku" placeholder="6578469" maxlength="20">
+      </div>
+      <div class="fg" id="fg-selector">
+        <label>CSS SELECTOR / KEYWORD</label>
+        <input id="wl-selector" placeholder=".add-to-cart">
+      </div>
+      <div class="fg" id="fg-instock">
+        <label>IN-STOCK TEXT</label>
+        <input id="wl-instock" placeholder="Add to Cart">
+      </div>
+      <div class="fg">
+        <label>POLL INTERVAL (SEC, MIN 30)</label>
+        <input id="wl-interval" type="number" value="60" min="30" max="3600">
+      </div>
+    </div>
+    <button class="btn green" style="margin-top:14px" onclick="addSite()">+ ADD</button>
+  </div>
+
+  <hr>
+  <p class="sub-label">— CURRENT WATCHLIST —</p>
+  <div id="wl-list"></div>
+  <div class="empty" id="wl-empty" style="display:none">
+    <img src="/static/sprites/snorlax.png" class="empty-sprite" alt="" aria-hidden="true">
+    <strong>SNORLAX IS BLOCKING THE PATH</strong>Add a product above to move him.
+  </div>
+</section>
+
+<!-- ══════════════════ ALERTS ══════════════════ -->
+<section id="tab-alerts">
+  <div class="sec-head">
+    <h2>RESTOCK ALERTS</h2>
+    <button class="btn" style="font-size:7px;padding:5px 10px" onclick="clearAlerts()">CLEAR</button>
+  </div>
+  <div class="dialog-list" id="alerts-list"></div>
+  <div class="empty" id="alerts-empty">
+    <img src="/static/sprites/gengar.gif" class="empty-sprite" alt="" aria-hidden="true">
+    <strong>NO ALERTS YET</strong>Gengar lurks, waiting for a restock...
+  </div>
+</section>
+
+<!-- ══════════════════ SETTINGS ══════════════════ -->
+<section id="tab-settings">
+  <div class="sec-head"><h2>SETTINGS</h2></div>
+  <div class="settings-card">
+    <h3>BEST BUY API KEY</h3>
+    <p class="desc">
+      Required for Best Buy API monitoring. Saved to your local
+      <code style="background:var(--gb-screen);padding:1px 5px;border:1px solid var(--gb-border)">.env</code>
+      file only — never returned to the browser or sent anywhere remotely.
+    </p>
+    <div class="fg">
+      <label>PASTE API KEY</label>
+      <input id="bby-input" type="password" placeholder="••••••••••••••••" autocomplete="off" spellcheck="false">
+    </div>
+    <button class="btn green" style="margin-top:12px" onclick="saveKey()">SAVE KEY</button>
+    <div class="key-row">
+      <span class="dot" id="key-dot"></span>
+      <span id="key-label">—</span>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<aside id="sprite-panel">
+  <img id="page-sprite"
+       src="/static/sprites/drowzee.gif"
+       alt=""
+       aria-hidden="true">
+</aside>
+</div><!-- #page-layout -->
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// SPRITE CONFIG
+// Map alert types to sprite filenames in web/static/sprites/.
+// Keys checked in order: site name → 'demo' → 'default'.
+// Add entries here to swap the critter per alert type.
+// ═══════════════════════════════════════════════════════
+const SPRITES = {
+  default: '/static/sprites/charizard.gif', // restock = FIRE — back in stock!
+  demo:    '/static/sprites/gengar.gif',     // demo alerts: it's all an illusion
+  // Per-site overrides: uncomment and match exact site name from watchlist
+  // 'Best Buy': '/static/sprites/ultraball.png',
+  // Silver variants (white bg — best in framed contexts):
+  // 'charizard-silver': '/static/sprites/charizard.png',
+  // 'gengar-silver':    '/static/sprites/gengar.png',
+};
+
+function spriteFor(alert) {
+  if (alert.name && SPRITES[alert.name]) return SPRITES[alert.name];
+  if (alert._demo && SPRITES.demo)       return SPRITES.demo;
+  return SPRITES.default;
+}
+
+// ─── App state ────────────────────────────────────────
+const S = { running: false, demo: false, sites: {}, newAlerts: 0 };
+let localAlerts   = [];
+let watchlistItems = [];
+
+// ─── Utilities ────────────────────────────────────────
+function esc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function relTime(iso) {
+  if (!iso) return '—';
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  return Math.floor(s/3600) + 'h ago';
+}
+function toast(msg, cls) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (cls ? ' t-'+cls : '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3500);
+}
+async function api(method, path, body) {
+  const opts = { method, headers:{} };
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const r = await fetch(path, opts);
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || r.statusText); }
+  if (r.status === 204) return null;
+  return r.json();
+}
+
+// ─── Panel sprite — reacts to monitor state ───────────
+// Idle: Snorlax (blocking everything)
+// Running, waiting: Drowzee (hypnotizing)
+// Running + something IN_STOCK: Charizard (fire!)
+// Demo mode: Gengar (it's all an illusion)
+function panelSpriteFor() {
+  if (S.demo) return '/static/sprites/gengar.gif';
+  if (S.running) {
+    const hot = Object.values(S.sites).some(s => s.status === 'IN_STOCK');
+    return hot ? '/static/sprites/charizard.gif' : '/static/sprites/drowzee.gif';
+  }
+  return '/static/sprites/snorlax.png';
+}
+function updatePanelSprite() {
+  const el  = document.getElementById('page-sprite');
+  const src = panelSpriteFor();
+  if (el.src.split('/').pop() === src.split('/').pop()) return;
+  el.style.opacity = '0';
+  setTimeout(() => { el.src = src; el.style.opacity = '1'; }, 260);
+}
+
+// ─── Tab navigation ───────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  ['dashboard','watchlist','alerts','settings'].forEach((t,i) => {
+    if (t === name) document.querySelectorAll('nav button')[i].classList.add('active');
+  });
+  if (name === 'alerts') { S.newAlerts = 0; renderAlertBadge(); }
+}
+
+// ─── Header sync ──────────────────────────────────────
+function syncHeader() {
+  document.getElementById('hdr-dot').className  = 'hdr-dot' + (S.running ? ' running' : S.demo ? ' demo' : '');
+  document.getElementById('status-label').textContent = S.running ? 'RUNNING' : S.demo ? 'DEMO' : 'IDLE';
+  document.getElementById('demo-pill').style.display  = S.demo ? 'inline' : 'none';
+  document.getElementById('demo-banner').className    = S.demo ? 'on' : '';
+
+  document.getElementById('btn-start').disabled = S.running || S.demo;
+  document.getElementById('btn-stop').disabled  = !S.running && !S.demo;
+
+  const db = document.getElementById('btn-demo');
+  db.textContent = S.demo ? '■ STOP DEMO' : '🎮 DEMO';
+  db.className   = 'btn demo-btn' + (S.demo ? ' active-demo' : '');
+  db.disabled    = S.running;
+  updatePanelSprite();
+}
+
+// ─── Status table ─────────────────────────────────────
+const BADGE = {
+  IN_STOCK:     ['b-in',    'IN STOCK'],
+  OUT_OF_STOCK: ['b-out',   'OUT'],
+  BLOCKED:      ['b-blocked','BLOCKED'],
+  ERROR:        ['b-error', 'ERROR'],
+  AWAITING_KEY: ['b-await', 'AWAITING KEY'],
+  UNKNOWN:      ['b-unknown','UNKNOWN'],
+};
+function badge(status) {
+  const [cls, label] = BADGE[status] || ['b-unknown', status || '—'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+function renderTable() {
+  const tbody   = document.getElementById('status-tbody');
+  const entries = Object.entries(S.sites);
+  document.getElementById('site-count').textContent = entries.length ? entries.length + ' SITE(S)' : '';
+  if (!entries.length) {
+    tbody.innerHTML = '<tr class="empty-msg"><td colspan="6">NO SITES MONITORED<br>START THE MONITOR OR TRY DEMO MODE</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(([name, s]) => {
+    const demoPill = s.is_demo ? '<span class="badge b-demo">DEMO</span>' : '';
+    return `<tr>
+      <td style="font-family:var(--px);font-size:8px">${esc(name)}${demoPill}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.product_name)}</td>
+      <td>${badge(s.status)}</td>
+      <td style="font-family:var(--px);font-size:9px;color:var(--gb-in)">${esc(s.price||'—')}</td>
+      <td style="color:var(--gb-dim);font-size:11px">${relTime(s.last_checked)}</td>
+      <td style="text-align:right;color:var(--gb-dim);font-size:11px">${s.total_checks||0}</td>
+    </tr>`;
+  }).join('');
+}
+function upsertSite(data) {
+  const prev = S.sites[data.name] || {};
+  S.sites[data.name] = { ...prev, ...data, is_demo: prev.is_demo ?? (S.demo && !S.running) };
+  renderTable();
+  updatePanelSprite();
+}
+
+// ─── Monitor controls ─────────────────────────────────
+async function startMonitor() {
+  try {
+    const d = await api('POST', '/api/monitor/start');
+    S.running = true; syncHeader();
+    toast('MONITOR STARTED — ' + d.started + ' SITE(S)');
+    await loadStatus();
+  } catch(e) { toast('ERROR: ' + e.message); }
+}
+async function stopAll() {
+  try {
+    if (S.demo) { await api('POST','/api/demo/stop');    S.demo    = false; }
+    else        { await api('POST','/api/monitor/stop'); S.running = false; }
+    S.sites = {}; renderTable(); syncHeader();
+    toast('STOPPED');
+  } catch(e) { toast('ERROR: ' + e.message); }
+}
+async function toggleDemo() {
+  if (S.demo) { stopAll(); return; }
+  try {
+    await api('POST', '/api/demo/start');
+    S.demo = true; syncHeader();
+    showTab('dashboard');
+    toast('DEMO MODE ON — WATCH FOR RESTOCKS', 'demo');
+    await loadStatus();
+  } catch(e) { toast('ERROR: ' + e.message); }
+}
+
+// ─── Alerts ───────────────────────────────────────────
+function renderAlertBadge() {
+  const el   = document.getElementById('alert-badge');
+  const ball = document.getElementById('nav-ball');
+  el.style.display = S.newAlerts > 0 ? 'inline' : 'none';
+  el.textContent   = S.newAlerts;
+  ball.classList.toggle('has-alerts', S.newAlerts > 0);
+}
+function renderAlerts() {
+  const list  = document.getElementById('alerts-list');
+  const empty = document.getElementById('alerts-empty');
+  if (!localAlerts.length) { list.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display = 'none';
+  list.innerHTML = [...localAlerts].reverse().map(a => {
+    const isDemo = !!(a._demo || (a.name && a.name.startsWith('Demo ')));
+    const t = new Date(a.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    return `<div class="dialog-box${isDemo?' demo-dialog':''}">
+      <img src="${esc(spriteFor(a))}"
+           alt=""
+           aria-hidden="true"
+           class="dialog-sprite"
+           onerror="this.style.display='none'">
+      <div class="dialog-text">
+        <div class="dialog-product">${esc(a.product_name)}</div>
+        <div class="dialog-meta">
+          <span>${esc(a.name)}</span>
+          ${a.price ? `<span class="dialog-price">${esc(a.price)}</span>` : ''}
+          <span class="dialog-time">${t}</span>
+          <span class="dialog-link"><a href="${esc(a.url)}" target="_blank" rel="noopener">OPEN ↗</a></span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function pushAlert(data) {
+  localAlerts.push({ ...data, _demo: S.demo });
+  if (localAlerts.length > 100) localAlerts.shift();
+  renderAlerts();
+  S.newAlerts++; renderAlertBadge();
+  const isDemo = data.name && data.name.startsWith('Demo ');
+  toast('>> ' + data.product_name + (data.price?' '+data.price:'') + ' // ' + data.name,
+        isDemo ? 'demo' : 'restock');
+}
+function clearAlerts() {
+  localAlerts=[]; S.newAlerts=0; renderAlerts(); renderAlertBadge();
+}
+
+// ─── Watchlist ────────────────────────────────────────
+function onTypeChange() {
+  const t = document.getElementById('wl-type').value;
+  document.getElementById('fg-sku').style.display      = t==='bestbuy' ? '' : 'none';
+  document.getElementById('fg-selector').style.display = t!=='bestbuy' ? '' : 'none';
+  document.getElementById('fg-instock').style.display  = t==='css'     ? '' : 'none';
+}
+function renderWatchlist() {
+  const list  = document.getElementById('wl-list');
+  const empty = document.getElementById('wl-empty');
+  if (!watchlistItems.length) { list.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display = 'none';
+  list.innerHTML = watchlistItems.map(w => `
+    <div class="wl-card">
+      <div style="flex:1;min-width:0">
+        <div class="wl-name">${esc(w.product_name)}</div>
+        <div class="wl-meta">${esc(w.name)} · ${esc(w.type)} · ${w.poll_interval}s</div>
+      </div>
+      <button class="btn red" style="font-size:7px;padding:5px 10px" onclick="deleteSite('${esc(w.id)}')">REMOVE</button>
+    </div>`).join('');
+}
+async function addSite() {
+  const name=document.getElementById('wl-name').value.trim();
+  const product=document.getElementById('wl-product').value.trim();
+  const url=document.getElementById('wl-url').value.trim();
+  if(!name||!product||!url){toast('FILL IN NAME, PRODUCT & URL');return;}
+  const entry={
+    name, product_name:product, url,
+    type:          document.getElementById('wl-type').value,
+    sku:           document.getElementById('wl-sku').value.trim(),
+    selector:      document.getElementById('wl-selector').value.trim(),
+    in_stock_text: document.getElementById('wl-instock').value.trim(),
+    poll_interval: Math.max(30, parseInt(document.getElementById('wl-interval').value)||60),
+    jitter:15,
+  };
+  try {
+    const added = await api('POST','/api/watchlist',entry);
+    watchlistItems.push(added); renderWatchlist();
+    ['wl-name','wl-product','wl-url','wl-sku','wl-selector','wl-instock'].forEach(id=>document.getElementById(id).value='');
+    toast(product+' ADDED');
+  } catch(e){toast('ERROR: '+e.message);}
+}
+async function deleteSite(id) {
+  try {
+    await api('DELETE','/api/watchlist/'+id);
+    watchlistItems=watchlistItems.filter(w=>w.id!==id); renderWatchlist();
+  } catch(e){toast('ERROR: '+e.message);}
+}
+
+// ─── Settings ─────────────────────────────────────────
+async function saveKey() {
+  const val=document.getElementById('bby-input').value.trim();
+  if(!val){toast('ENTER A KEY FIRST');return;}
+  try {
+    const d=await api('POST','/api/settings',{bby_api_key:val});
+    document.getElementById('bby-input').value='';
+    setKeyStatus(d.bby_key_set); toast('KEY SAVED TO .ENV');
+  } catch(e){toast('ERROR: '+e.message);}
+}
+function setKeyStatus(set) {
+  document.getElementById('key-dot').className  = 'dot'+(set?' set':'');
+  document.getElementById('key-label').textContent = set ? 'KEY CONFIGURED' : 'NO KEY SET';
+}
+
+// ─── Load initial state ───────────────────────────────
+async function loadStatus() {
+  try {
+    const d=await api('GET','/api/monitor/status');
+    S.running=d.running; S.demo=d.demo_mode; S.sites={};
+    for(const[n,s]of Object.entries(d.sites||{})) S.sites[n]=s;
+    renderTable(); syncHeader();
+  } catch(_){}
+}
+async function loadAlerts()    { try{ localAlerts=await api('GET','/api/alerts'); renderAlerts(); }catch(_){} }
+async function loadWatchlist() { try{ watchlistItems=await api('GET','/api/watchlist'); renderWatchlist(); }catch(_){} }
+async function loadSettings()  { try{ const d=await api('GET','/api/settings'); setKeyStatus(d.bby_key_set); }catch(_){} }
+
+// ─── SSE ──────────────────────────────────────────────
+let sse=null;
+function connectSSE() {
+  if(sse) sse.close();
+  sse=new EventSource('/api/stream');
+  sse.onmessage=e=>{
+    try{
+      const d=JSON.parse(e.data);
+      if(d.type==='status_update') upsertSite(d);
+      if(d.type==='restock')       pushAlert(d);
+    }catch(_){}
+  };
+  sse.onerror=()=>{sse.close();setTimeout(connectSSE,3000);};
+}
+
+setInterval(renderTable, 20000);
+
+(async()=>{
+  await Promise.all([loadStatus(),loadAlerts(),loadWatchlist(),loadSettings()]);
+  connectSSE();
+})();
+</script>
+</body>
+</html>

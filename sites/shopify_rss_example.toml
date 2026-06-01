@@ -1,0 +1,31 @@
+# Shopify RSS/Atom feed — presence-based stock detection
+# Rename to shopify_<store>.toml (remove _example) to activate.
+#
+# Most Shopify stores expose a per-product Atom feed at:
+#   https://<store>.myshopify.com/products/<product-handle>.atom
+# Items appear in the feed only when at least one variant has inventory.
+# Absence of items == sold out; presence == in stock.
+# This is the most reliable Shopify stock signal — no HTML scraping needed.
+#
+# Find the product handle: it's the slug in the product page URL, e.g.
+#   https://kith.com/products/nike-air-max-1-og  →  handle = nike-air-max-1-og
+
+[site]
+name = "Example Shopify Store"
+url = "https://example.myshopify.com/products/your-product-handle.atom"
+poll_interval = 60
+jitter = 20
+
+[product]
+name = "Product Name"
+
+[stock]
+type = "rss"
+# Optional: filter feed items to those containing this keyword.
+# Useful when the feed covers a product with many variants — set keyword to
+# the specific variant you care about (e.g. "Size 10" or "Black / XL").
+# Leave blank to treat any item in the feed as an in-stock signal.
+selector = ""
+# Optional: require this text inside a matching item.
+# Example for stores that label variants: in_stock_text = "available"
+# in_stock_text = ""

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "restock-monitor"
+version = "0.1.0"
+description = "Polite async retail restock monitor with per-site config"
+requires-python = ">=3.9"
+dependencies = [
+    "httpx[http2]>=0.27",
+    "selectolax>=0.3",
+    "python-dotenv>=1.0",
+    "jmespath>=1.0",
+    "tomli>=2.0; python_version < '3.11'",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+]
+
+[project.scripts]
+restock-monitor = "monitor:main_sync"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "sites*", "web*"]

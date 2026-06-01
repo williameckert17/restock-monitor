@@ -1,0 +1,30 @@
+# Best Buy — CSS selector example
+# Rename to bestbuy.toml (remove _example) to activate.
+
+[site]
+name = "Best Buy"
+url = "https://www.bestbuy.com/site/your-product/SKUID.p"
+poll_interval = 120
+jitter = 30
+
+[product]
+name = "NVIDIA RTX 4090 Founders Edition"
+# Optional: CSS selector whose text is included in restock alerts as the price.
+# Open DevTools on the product page and inspect the price element to find the selector.
+# price_selector = ".priceView-hero-price span:first-child"
+
+[stock]
+type = "css"
+selector = ".add-to-cart-button"
+in_stock_text = "Add to Cart"
+out_of_stock_text = "Sold Out"
+# match_type = "contains"   # default; also: "exact", "regex", "not_contains"
+# attribute = ""            # check an HTML attribute value instead of element text
+
+# "not_contains" example: in stock whenever the button does NOT say "Sold Out"
+# in_stock_text = "Sold Out"
+# match_type    = "not_contains"
+
+# Optional site-specific request headers
+# [extra_headers]
+# "Accept-Language" = "en-US,en;q=0.9"

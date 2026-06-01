@@ -1,0 +1,26 @@
+# JSON API example — many retailers expose a stock/fulfillment API
+# Rename to <retailer>.toml (remove _example) to activate.
+#
+# Tip: open DevTools → Network tab → filter by Fetch/XHR while loading the
+# product page. Look for a request returning JSON with availability/stock data.
+
+[site]
+name = "Example Retailer API"
+url = "https://api.example.com/v1/products/SKU123/availability"
+poll_interval = 90
+jitter = 20
+
+[product]
+name = "Your Product Name"
+# Optional: JMESPath expression for price within the same JSON response.
+# price_json_path = "data.product.price_formatted"
+
+[stock]
+type = "json"
+# JMESPath expression pointing to the availability field in the JSON response
+json_path = "data.product.fulfillment.availability_status"
+in_stock_value = "IN_STOCK"
+
+# Some JSON endpoints require an API key or specific headers
+# [extra_headers]
+# "x-api-key" = "your-key-here"
