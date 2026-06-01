@@ -9,8 +9,10 @@ from dotenv import load_dotenv
 from core.loader import load_sites
 from core.poller import run_site
 from core.status import StatusBoard
+from web.paths import APP_DATA_DIR, ENV_PATH, LOG_PATH, STATUS_PATH
 
-load_dotenv()
+APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+load_dotenv(ENV_PATH)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,12 +20,12 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("logs/monitor.log"),
+        logging.FileHandler(LOG_PATH),
     ],
 )
 log = logging.getLogger(__name__)
 
-_STATUS_PATH = Path("logs/status.json")
+_STATUS_PATH = STATUS_PATH
 _DEFAULT_DASHBOARD_INTERVAL = 60  # seconds between console table refreshes
 
 

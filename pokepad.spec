@@ -21,11 +21,12 @@ a = Analysis(
         # Web layer
         ("web/static",   "web/static"),
         ("web/__init__.py", "web"),
-        ("web/app.py",   "web"),
-        ("web/demo.py",  "web"),
-        ("web/events.py","web"),
-        ("web/runner.py","web"),
-        ("web/store.py", "web"),
+        ("web/app.py",    "web"),
+        ("web/demo.py",   "web"),
+        ("web/events.py", "web"),
+        ("web/paths.py",  "web"),
+        ("web/runner.py", "web"),
+        ("web/store.py",  "web"),
         # Core engine
         ("core",  "core"),
         # Config & data dirs
@@ -70,6 +71,8 @@ a = Analysis(
         # Email stdlib (used by notifier.py SMTP channel)
         "email.mime.text",
         "email.mime.multipart",
+        # platformdirs
+        "platformdirs",
         # pywebview platform backends
         "webview",
         "webview.platforms.cocoa",

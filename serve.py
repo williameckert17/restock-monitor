@@ -6,13 +6,13 @@ Usage:
     PORT=9000 python serve.py  # custom port
 """
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
-Path("logs").mkdir(exist_ok=True)
-Path("data").mkdir(exist_ok=True)
+from web.paths import APP_DATA_DIR, ENV_PATH
+
+APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+load_dotenv(ENV_PATH, override=True)
 
 if __name__ == "__main__":
     import uvicorn

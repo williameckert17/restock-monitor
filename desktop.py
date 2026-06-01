@@ -16,16 +16,16 @@ import socket
 import sys
 import threading
 import time
-from pathlib import Path
 from typing import Optional
 
 import uvicorn
 import webview
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
-Path("logs").mkdir(exist_ok=True)
-Path("data").mkdir(exist_ok=True)
+from web.paths import APP_DATA_DIR, ENV_PATH
+
+APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+load_dotenv(ENV_PATH, override=True)
 
 
 # ── Port helpers ─────────────────────────────────────────────────────────────

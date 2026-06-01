@@ -1,23 +1,22 @@
 import json
 import uuid
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-_DATA_PATH = Path("data/watchlist.json")
+from web.paths import WATCHLIST_PATH
 
 
 def _load() -> List[Dict[str, Any]]:
-    if not _DATA_PATH.exists():
+    if not WATCHLIST_PATH.exists():
         return []
     try:
-        return json.loads(_DATA_PATH.read_text())
+        return json.loads(WATCHLIST_PATH.read_text())
     except Exception:
         return []
 
 
 def _save(entries: List[Dict[str, Any]]) -> None:
-    _DATA_PATH.parent.mkdir(exist_ok=True)
-    _DATA_PATH.write_text(json.dumps(entries, indent=2))
+    WATCHLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    WATCHLIST_PATH.write_text(json.dumps(entries, indent=2))
 
 
 def list_sites() -> List[Dict[str, Any]]:

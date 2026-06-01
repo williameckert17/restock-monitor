@@ -14,7 +14,6 @@ Security notes:
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -27,12 +26,10 @@ from core.status import StatusBoard
 from web import store
 from web.demo import DemoRunner
 from web.events import bus
+from web.paths import APP_DATA_DIR, ENV_PATH, STATIC_DIR, STATUS_PATH
 from web.runner import MonitorRunner
 
-_STATUS_PATH = Path("logs/status.json")
-_ENV_PATH = Path(".env")
-
-board = StatusBoard(status_path=_STATUS_PATH)
+board = StatusBoard(status_path=STATUS_PATH)
 runner = MonitorRunner(board)
 demo = DemoRunner(board)
 
@@ -65,8 +62,7 @@ def _on_record(config: SiteConfig, result, restock_fired: bool) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     board._on_record = _on_record
-    Path("logs").mkdir(exist_ok=True)
-    Path("data").mkdir(exist_ok=True)
+    APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
     yield
     runner.stop()
     demo.stop()
@@ -197,16 +193,17 @@ def get_settings():
 def save_settings(body: SettingsIn):
     if body.bby_api_key is not None:
         from dotenv import set_key
-        set_key(str(_ENV_PATH), "BBY_API_KEY", body.bby_api_key)
+        APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        set_key(str(ENV_PATH), "BBY_API_KEY", body.bby_api_key)
         os.environ["BBY_API_KEY"] = body.bby_api_key
     return {"bby_key_set": bool(os.getenv("BBY_API_KEY", ""))}
 
 
 # ── Static files ─────────────────────────────────────────────────────────────
 
-app.mount("/static", StaticFiles(directory="web/static"), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/")
 def index():
-    return FileResponse("web/static/index.html")
+    return FileResponse(str(STATIC_DIR / "index.html"))
