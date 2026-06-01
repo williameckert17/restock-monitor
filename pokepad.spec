@@ -38,6 +38,7 @@ a = Analysis(
         ("sites",        "sites"),
         # ── Env template surfaced on first-run setup ──────────────────────────
         (".env.example", "."),
+        ("seeds.json",   "."),
         # ── Third-party package data ──────────────────────────────────────────
         *collect_data_files("fastapi"),     # JSON schema / OpenAPI assets
         *collect_data_files("starlette"),   # templates

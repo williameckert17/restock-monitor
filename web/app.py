@@ -26,7 +26,7 @@ from core.status import StatusBoard
 from web import store
 from web.demo import DemoRunner
 from web.events import bus
-from web.paths import APP_DATA_DIR, ENV_PATH, STATIC_DIR, STATUS_PATH
+from web.paths import APP_DATA_DIR, ENV_PATH, SEEDS_PATH, STATIC_DIR, STATUS_PATH
 from web.runner import MonitorRunner
 
 board = StatusBoard(status_path=STATUS_PATH)
@@ -63,6 +63,7 @@ def _on_record(config: SiteConfig, result, restock_fired: bool) -> None:
 async def lifespan(app: FastAPI):
     board._on_record = _on_record
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    store.seed_if_empty(SEEDS_PATH)
     yield
     runner.stop()
     demo.stop()
@@ -95,6 +96,9 @@ class WatchlistEntry(BaseModel):
     out_of_stock_text: str = ""
     poll_interval: int = 60
     jitter: int = 15
+    check_type: str = "product"   # "product" or "category"
+    source: str = "public_check"  # "bestbuy_api" or "public_check"
+    enabled: bool = True
 
 
 @app.get("/api/watchlist")
@@ -105,6 +109,14 @@ def get_watchlist():
 @app.post("/api/watchlist", status_code=201)
 def add_watchlist(entry: WatchlistEntry):
     return store.add_site(entry.model_dump())
+
+
+@app.put("/api/watchlist/{site_id}")
+def update_watchlist(site_id: str, entry: WatchlistEntry):
+    updated = store.update_site(site_id, entry.model_dump())
+    if updated is None:
+        raise HTTPException(404, "Not found")
+    return updated
 
 
 @app.delete("/api/watchlist/{site_id}", status_code=204)

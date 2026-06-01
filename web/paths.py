@@ -33,5 +33,7 @@ LOG_PATH:       Path = APP_DATA_DIR / "monitor.log"
 
 if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
     STATIC_DIR: Path = Path(sys._MEIPASS) / "web" / "static"
+    SEEDS_PATH: Path = Path(sys._MEIPASS) / "seeds.json"
 else:
     STATIC_DIR = Path(__file__).parent / "static"
+    SEEDS_PATH = Path(__file__).parent.parent / "seeds.json"

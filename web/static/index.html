@@ -372,7 +372,27 @@ tbody tr:hover td { background: rgba(255,255,255,.03); }
   padding: 10px 14px;
 }
 .wl-name    { font-family: var(--px); font-size: 9px; color: var(--gb-bright); }
-.wl-meta    { font-size: 11px; color: var(--gb-dim); margin-top: 4px; }
+.wl-meta    { font-size: 11px; color: var(--gb-dim); margin-top: 6px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.wl-card.wl-disabled { opacity: .45; }
+.badge {
+  display: inline-block; font-family: var(--px); font-size: 7px;
+  padding: 2px 6px; border: 1px solid; line-height: 1.6; white-space: nowrap;
+}
+.badge-bby  { color: var(--gb-await);  border-color: var(--gb-await); }
+.badge-pub  { color: var(--gb-dim);    border-color: var(--gb-dim); }
+.badge-cat  { color: var(--gb-demo);   border-color: var(--gb-demo); }
+.badge-prod { color: var(--gb-bright); border-color: var(--gb-bright); }
+
+/* ── Edit modal ────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.78);
+  display: flex; align-items: center; justify-content: center; z-index: 900;
+}
+.modal-box {
+  background: var(--gb-panel); border: 3px solid var(--gb-border);
+  box-shadow: 6px 6px 0 var(--gb-border); padding: 22px 24px;
+  max-width: 640px; width: 92%; max-height: 88vh; overflow-y: auto;
+}
 
 /* ── Forms ───────────────────────────────────────────── */
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 580px; }
@@ -540,7 +560,21 @@ hr { border: none; border-top: 2px solid var(--gb-border); margin: 22px 0; }
         <input id="wl-url" type="url" placeholder="https://...">
       </div>
       <div class="fg">
-        <label>DETECTION TYPE</label>
+        <label>SOURCE</label>
+        <select id="wl-source" onchange="onSourceChange()">
+          <option value="public_check">Public check (CSS / JSON / RSS)</option>
+          <option value="bestbuy_api">Best Buy API (requires key)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>CHECK TYPE</label>
+        <select id="wl-check-type">
+          <option value="product">Product (single item)</option>
+          <option value="category">Category (new items)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>DETECTION METHOD</label>
         <select id="wl-type" onchange="onTypeChange()">
           <option value="css">CSS (HTML page)</option>
           <option value="json">JSON API</option>
@@ -560,9 +594,20 @@ hr { border: none; border-top: 2px solid var(--gb-border); margin: 22px 0; }
         <label>IN-STOCK TEXT</label>
         <input id="wl-instock" placeholder="Add to Cart">
       </div>
+      <div class="fg" id="fg-outofstock">
+        <label>OUT-OF-STOCK TEXT</label>
+        <input id="wl-outofstock" placeholder="Sold Out">
+      </div>
       <div class="fg">
         <label>POLL INTERVAL (SEC, MIN 30)</label>
         <input id="wl-interval" type="number" value="60" min="30" max="3600">
+      </div>
+      <div class="fg">
+        <label>ENABLED</label>
+        <select id="wl-enabled">
+          <option value="true">Yes — monitor this entry</option>
+          <option value="false">No — skip this entry</option>
+        </select>
       </div>
     </div>
     <button class="btn green" style="margin-top:14px" onclick="addSite()">+ ADD</button>
@@ -847,25 +892,50 @@ function clearAlerts() {
 }
 
 // ─── Watchlist ────────────────────────────────────────
+function onSourceChange() {
+  const src = document.getElementById('wl-source').value;
+  if (src === 'bestbuy_api') document.getElementById('wl-type').value = 'bestbuy';
+  onTypeChange();
+}
 function onTypeChange() {
   const t = document.getElementById('wl-type').value;
-  document.getElementById('fg-sku').style.display      = t==='bestbuy' ? '' : 'none';
-  document.getElementById('fg-selector').style.display = t!=='bestbuy' ? '' : 'none';
-  document.getElementById('fg-instock').style.display  = t==='css'     ? '' : 'none';
+  document.getElementById('fg-sku').style.display        = t==='bestbuy' ? '' : 'none';
+  document.getElementById('fg-selector').style.display   = t!=='bestbuy' ? '' : 'none';
+  document.getElementById('fg-instock').style.display    = t==='css'     ? '' : 'none';
+  document.getElementById('fg-outofstock').style.display = t==='css'     ? '' : 'none';
 }
 function renderWatchlist() {
   const list  = document.getElementById('wl-list');
   const empty = document.getElementById('wl-empty');
   if (!watchlistItems.length) { list.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display = 'none';
-  list.innerHTML = watchlistItems.map(w => `
-    <div class="wl-card">
+  list.innerHTML = watchlistItems.map(w => {
+    const on = w.enabled !== false;
+    const srcBadge  = w.source==='bestbuy_api'
+      ? '<span class="badge badge-bby">BBY API</span>'
+      : '<span class="badge badge-pub">PUBLIC</span>';
+    const typeBadge = w.check_type==='category'
+      ? '<span class="badge badge-cat">CATEGORY</span>'
+      : '<span class="badge badge-prod">PRODUCT</span>';
+    return `
+    <div class="wl-card${on?'':' wl-disabled'}">
       <div style="flex:1;min-width:0">
         <div class="wl-name">${esc(w.product_name)}</div>
-        <div class="wl-meta">${esc(w.name)} · ${esc(w.type)} · ${w.poll_interval}s</div>
+        <div class="wl-meta">
+          <span>${esc(w.name)}</span>${srcBadge}${typeBadge}
+          <span>${w.poll_interval}s</span>
+        </div>
       </div>
-      <button class="btn red" style="font-size:7px;padding:5px 10px" onclick="deleteSite('${esc(w.id)}')">REMOVE</button>
-    </div>`).join('');
+      <div style="display:flex;gap:8px;flex-shrink:0;align-items:center">
+        <button class="btn${on?' green':''}" style="font-size:7px;padding:5px 9px"
+          onclick="toggleEnabled('${esc(w.id)}',${!on})">${on?'ON':'OFF'}</button>
+        <button class="btn" style="font-size:7px;padding:5px 10px"
+          onclick="openEdit('${esc(w.id)}')">EDIT</button>
+        <button class="btn red" style="font-size:7px;padding:5px 10px"
+          onclick="deleteSite('${esc(w.id)}')">REMOVE</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 async function addSite() {
   const name=document.getElementById('wl-name').value.trim();
@@ -874,17 +944,21 @@ async function addSite() {
   if(!name||!product||!url){toast('FILL IN NAME, PRODUCT & URL');return;}
   const entry={
     name, product_name:product, url,
-    type:          document.getElementById('wl-type').value,
-    sku:           document.getElementById('wl-sku').value.trim(),
-    selector:      document.getElementById('wl-selector').value.trim(),
-    in_stock_text: document.getElementById('wl-instock').value.trim(),
-    poll_interval: Math.max(30, parseInt(document.getElementById('wl-interval').value)||60),
-    jitter:15,
+    source:           document.getElementById('wl-source').value,
+    check_type:       document.getElementById('wl-check-type').value,
+    type:             document.getElementById('wl-type').value,
+    sku:              document.getElementById('wl-sku').value.trim(),
+    selector:         document.getElementById('wl-selector').value.trim(),
+    in_stock_text:    document.getElementById('wl-instock').value.trim(),
+    out_of_stock_text:document.getElementById('wl-outofstock').value.trim(),
+    poll_interval:    Math.max(30, parseInt(document.getElementById('wl-interval').value)||60),
+    jitter:           15,
+    enabled:          document.getElementById('wl-enabled').value === 'true',
   };
   try {
     const added = await api('POST','/api/watchlist',entry);
     watchlistItems.push(added); renderWatchlist();
-    ['wl-name','wl-product','wl-url','wl-sku','wl-selector','wl-instock'].forEach(id=>document.getElementById(id).value='');
+    ['wl-name','wl-product','wl-url','wl-sku','wl-selector','wl-instock','wl-outofstock'].forEach(id=>document.getElementById(id).value='');
     toast(product+' ADDED');
   } catch(e){toast('ERROR: '+e.message);}
 }
@@ -893,6 +967,82 @@ async function deleteSite(id) {
     await api('DELETE','/api/watchlist/'+id);
     watchlistItems=watchlistItems.filter(w=>w.id!==id); renderWatchlist();
   } catch(e){toast('ERROR: '+e.message);}
+}
+
+// ─── Edit modal ───────────────────────────────────────
+let _editingId = null;
+function openEdit(id) {
+  const w = watchlistItems.find(x=>x.id===id);
+  if (!w) return;
+  _editingId = id;
+  document.getElementById('edit-name').value      = w.name || '';
+  document.getElementById('edit-product').value   = w.product_name || '';
+  document.getElementById('edit-url').value       = w.url || '';
+  document.getElementById('edit-source').value    = w.source || 'public_check';
+  document.getElementById('edit-check-type').value= w.check_type || 'product';
+  document.getElementById('edit-type').value      = w.type || 'css';
+  document.getElementById('edit-sku').value       = w.sku || '';
+  document.getElementById('edit-selector').value  = w.selector || '';
+  document.getElementById('edit-instock').value   = w.in_stock_text || '';
+  document.getElementById('edit-outofstock').value= w.out_of_stock_text || '';
+  document.getElementById('edit-interval').value  = w.poll_interval || 60;
+  document.getElementById('edit-enabled').value   = (w.enabled !== false) ? 'true' : 'false';
+  onEditTypeChange();
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+function closeEdit() {
+  document.getElementById('edit-modal').style.display = 'none';
+  _editingId = null;
+}
+function onEditSourceChange() {
+  const src = document.getElementById('edit-source').value;
+  if (src === 'bestbuy_api') document.getElementById('edit-type').value = 'bestbuy';
+  onEditTypeChange();
+}
+function onEditTypeChange() {
+  const t = document.getElementById('edit-type').value;
+  document.getElementById('edit-fg-sku').style.display        = t==='bestbuy' ? '' : 'none';
+  document.getElementById('edit-fg-selector').style.display   = t!=='bestbuy' ? '' : 'none';
+  document.getElementById('edit-fg-instock').style.display    = t==='css'     ? '' : 'none';
+  document.getElementById('edit-fg-outofstock').style.display = t==='css'     ? '' : 'none';
+}
+async function saveEdit() {
+  if (!_editingId) return;
+  const w = watchlistItems.find(x=>x.id===_editingId);
+  if (!w) return;
+  const name    = document.getElementById('edit-name').value.trim();
+  const product = document.getElementById('edit-product').value.trim();
+  const url     = document.getElementById('edit-url').value.trim();
+  if (!name||!product||!url) { toast('FILL IN NAME, PRODUCT & URL'); return; }
+  const entry = {
+    name, product_name:product, url,
+    source:           document.getElementById('edit-source').value,
+    check_type:       document.getElementById('edit-check-type').value,
+    type:             document.getElementById('edit-type').value,
+    sku:              document.getElementById('edit-sku').value.trim(),
+    selector:         document.getElementById('edit-selector').value.trim(),
+    in_stock_text:    document.getElementById('edit-instock').value.trim(),
+    out_of_stock_text:document.getElementById('edit-outofstock').value.trim(),
+    poll_interval:    Math.max(30, parseInt(document.getElementById('edit-interval').value)||60),
+    jitter:           w.jitter || 15,
+    enabled:          document.getElementById('edit-enabled').value === 'true',
+  };
+  try {
+    const updated = await api('PUT','/api/watchlist/'+_editingId, entry);
+    const idx = watchlistItems.findIndex(x=>x.id===_editingId);
+    if (idx !== -1) watchlistItems[idx] = updated;
+    closeEdit(); renderWatchlist(); toast(product+' UPDATED');
+  } catch(e) { toast('ERROR: '+e.message); }
+}
+async function toggleEnabled(id, newVal) {
+  const w = watchlistItems.find(x=>x.id===id);
+  if (!w) return;
+  try {
+    const updated = await api('PUT','/api/watchlist/'+id, {...w, enabled:newVal});
+    const idx = watchlistItems.findIndex(x=>x.id===id);
+    if (idx !== -1) watchlistItems[idx] = updated;
+    renderWatchlist();
+  } catch(e) { toast('ERROR: '+e.message); }
 }
 
 // ─── Settings ─────────────────────────────────────────
@@ -945,5 +1095,80 @@ setInterval(renderTable, 20000);
   connectSSE();
 })();
 </script>
+
+<!-- ══════════════════ EDIT MODAL ══════════════════ -->
+<div id="edit-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeEdit()">
+  <div class="modal-box">
+    <p class="sub-label">— EDIT ENTRY —</p>
+    <div class="form-grid">
+      <div class="fg">
+        <label>RETAILER NAME *</label>
+        <input id="edit-name" maxlength="60">
+      </div>
+      <div class="fg">
+        <label>PRODUCT NAME *</label>
+        <input id="edit-product" maxlength="80">
+      </div>
+      <div class="fg full">
+        <label>URL *</label>
+        <input id="edit-url" type="url">
+      </div>
+      <div class="fg">
+        <label>SOURCE</label>
+        <select id="edit-source" onchange="onEditSourceChange()">
+          <option value="public_check">Public check (CSS / JSON / RSS)</option>
+          <option value="bestbuy_api">Best Buy API (requires key)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>CHECK TYPE</label>
+        <select id="edit-check-type">
+          <option value="product">Product (single item)</option>
+          <option value="category">Category (new items)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>DETECTION METHOD</label>
+        <select id="edit-type" onchange="onEditTypeChange()">
+          <option value="css">CSS (HTML page)</option>
+          <option value="json">JSON API</option>
+          <option value="rss">RSS / Atom feed</option>
+          <option value="bestbuy">Best Buy API</option>
+        </select>
+      </div>
+      <div class="fg" id="edit-fg-sku" style="display:none">
+        <label>BEST BUY SKU</label>
+        <input id="edit-sku" maxlength="20">
+      </div>
+      <div class="fg" id="edit-fg-selector">
+        <label>CSS SELECTOR / KEYWORD</label>
+        <input id="edit-selector">
+      </div>
+      <div class="fg" id="edit-fg-instock">
+        <label>IN-STOCK TEXT</label>
+        <input id="edit-instock">
+      </div>
+      <div class="fg" id="edit-fg-outofstock">
+        <label>OUT-OF-STOCK TEXT</label>
+        <input id="edit-outofstock">
+      </div>
+      <div class="fg">
+        <label>POLL INTERVAL (SEC, MIN 30)</label>
+        <input id="edit-interval" type="number" min="30" max="3600">
+      </div>
+      <div class="fg">
+        <label>ENABLED</label>
+        <select id="edit-enabled">
+          <option value="true">Yes — monitor this entry</option>
+          <option value="false">No — skip this entry</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:18px">
+      <button class="btn green" onclick="saveEdit()">SAVE</button>
+      <button class="btn" onclick="closeEdit()">CANCEL</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

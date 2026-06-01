@@ -1,5 +1,6 @@
 import json
 import uuid
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from web.paths import WATCHLIST_PATH
@@ -32,6 +33,17 @@ def add_site(entry: Dict[str, Any]) -> Dict[str, Any]:
     return entry
 
 
+def update_site(site_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    entries = _load()
+    for i, e in enumerate(entries):
+        if e.get("id") == site_id:
+            updated = {**e, **updates, "id": site_id}
+            entries[i] = updated
+            _save(entries)
+            return updated
+    return None
+
+
 def delete_site(site_id: str) -> bool:
     entries = _load()
     new_entries = [e for e in entries if e.get("id") != site_id]
@@ -39,3 +51,21 @@ def delete_site(site_id: str) -> bool:
         return False
     _save(new_entries)
     return True
+
+
+def seed_if_empty(seeds_path: Path) -> None:
+    """Load seeds into the watchlist only when it is completely empty."""
+    if _load():
+        return
+    if not seeds_path.exists():
+        return
+    try:
+        seeds = json.loads(seeds_path.read_text())
+    except Exception:
+        return
+    entries = []
+    for s in seeds:
+        e = dict(s)
+        e["id"] = str(uuid.uuid4())
+        entries.append(e)
+    _save(entries)

@@ -28,6 +28,9 @@ class MonitorRunner:
 
         configs = []
         for e in entries:
+            if not e.get("enabled", True):
+                log.debug("Skipping disabled entry: %s", e.get("product_name", "?"))
+                continue
             try:
                 configs.append(_entry_to_config(e))
             except Exception as exc:
@@ -59,6 +62,8 @@ class MonitorRunner:
 
 
 def _entry_to_config(e: Dict[str, Any]) -> SiteConfig:
+    # source=bestbuy_api always implies type=bestbuy regardless of stored type field
+    stock_type = "bestbuy" if e.get("source") == "bestbuy_api" else e.get("type", "css")
     return SiteConfig(
         name=e["name"],
         url=e["url"],
@@ -66,7 +71,7 @@ def _entry_to_config(e: Dict[str, Any]) -> SiteConfig:
         poll_interval=max(int(e.get("poll_interval", 60)), _MIN_INTERVAL),
         jitter=int(e.get("jitter", 15)),
         stock=StockCheck(
-            type=e.get("type", "css"),
+            type=stock_type,
             sku=e.get("sku", ""),
             selector=e.get("selector", ""),
             in_stock_text=e.get("in_stock_text", ""),
