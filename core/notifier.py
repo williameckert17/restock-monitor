@@ -167,14 +167,17 @@ async def _send_twilio(config: SiteConfig, price: Optional[str]) -> None:
     sid   = os.getenv("TWILIO_ACCOUNT_SID", "")
     token = os.getenv("TWILIO_AUTH_TOKEN", "")
     from_ = os.getenv("TWILIO_FROM", "")
-    to    = os.getenv("TWILIO_TO", "")
-    if not all([sid, token, from_, to]):
+    to_raw = os.getenv("TWILIO_TO", "")
+    if not all([sid, token, from_, to_raw]):
         log.warning(
             "[%s] twilio channel active but one or more of "
             "TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM / TWILIO_TO not set",
             config.name,
         )
         return
+
+    # TWILIO_TO supports comma-separated numbers for multi-recipient alerts.
+    recipients = [n.strip() for n in to_raw.split(",") if n.strip()]
 
     price_note = f" ({price})" if price else ""
     body = (
@@ -185,9 +188,13 @@ async def _send_twilio(config: SiteConfig, price: Optional[str]) -> None:
 
     api_url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
     async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.post(api_url, auth=(sid, token), data={"From": from_, "To": to, "Body": body})
-        r.raise_for_status()
-    log.info("[%s] Twilio SMS sent to %s", config.name, to)
+        for to in recipients:
+            try:
+                r = await client.post(api_url, auth=(sid, token), data={"From": from_, "To": to, "Body": body})
+                r.raise_for_status()
+                log.info("[%s] Twilio SMS sent to %s", config.name, to)
+            except Exception as exc:
+                log.warning("[%s] Twilio SMS to %s failed: %s", config.name, to, exc)
 
 
 # ── Email (SMTP) ──────────────────────────────────────────────────────────────

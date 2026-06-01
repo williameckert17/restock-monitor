@@ -122,7 +122,7 @@ For JSON APIs: open DevTools → **Network** tab → filter **Fetch/XHR** → re
 | `TWILIO_ACCOUNT_SID` | — | Twilio account SID |
 | `TWILIO_AUTH_TOKEN` | — | Twilio auth token |
 | `TWILIO_FROM` | — | Twilio sender number (E.164) |
-| `TWILIO_TO` | — | Recipient number (E.164) |
+| `TWILIO_TO` | — | Recipient number(s) in E.164 format; comma-separate for multiple (`+15550000001,+15550000002`) |
 | `SMTP_HOST` | — | SMTP server (e.g. `smtp.gmail.com`) |
 | `SMTP_PORT` | `587` | SMTP port |
 | `SMTP_USER` | — | SMTP login |
