@@ -1,4 +1,4 @@
-# Restock Monitor
+# Restock Monitor · Pokepad
 
 Async, polite retail restock watcher. Polls product pages for stock changes and fires alerts the moment something comes back in stock.
 
@@ -177,3 +177,39 @@ This prevents hammering a temporarily overloaded server and is reset as soon as 
 - [ ] Add optional `price_selector` / `price_json_path` under `[product]` if you want price in alerts
 - [ ] Create `sites/<retailer>.toml`
 - [ ] Test with `poll_interval = 60` and watch the console table for a few cycles to confirm detection works
+
+---
+
+## App icon
+
+The Pokepad icon (pixel radar emblem on a night-sky tile) lives at `web/static/icons/pokepad.svg`.
+
+### Generated files
+
+| File | Use |
+|---|---|
+| `web/static/icons/pokepad-1024.png` | Master source PNG |
+| `web/static/icons/pokepad-512.png` | Web app icon |
+| `web/static/icons/favicon.ico` | Browser favicon (16 / 32 / 48) |
+| `web/static/icons/pokepad.ico` | Windows app icon (16 / 32 / 48 / 256) |
+| `web/static/icons/pokepad.icns` | macOS app icon |
+
+### Regenerating icons
+
+If you edit `pokepad.svg`, re-run:
+
+```bash
+pip install Pillow   # one-time
+python3 scripts/gen_icons.py
+```
+
+Requires macOS for `.icns` (uses the built-in `iconutil`). The `.ico` and `.png` outputs work on any platform.
+
+### Building a native app (PyInstaller)
+
+```bash
+pip install pyinstaller
+pyinstaller pokepad.spec
+# → dist/Pokepad.app  (macOS)
+# → dist/Pokepad.exe  (Windows — change icon= in pokepad.spec to pokepad.ico first)
+```

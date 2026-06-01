@@ -1,0 +1,41 @@
+<svg width="512" height="512" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="image-rendering:pixelated">
+  <!-- Pokepad app icon tile: pixel radar emblem on a night-sky gradient. Original art. -->
+
+  <!-- Night-sky background bands -->
+  <rect x="0" y="0" width="20" height="6" fill="#1b1442"/>
+  <rect x="0" y="6" width="20" height="5" fill="#2a1f63"/>
+  <rect x="0" y="11" width="20" height="5" fill="#3a2c86"/>
+  <rect x="0" y="16" width="20" height="4" fill="#4a3aa8"/>
+
+  <!-- Stars -->
+  <rect x="3" y="4" width="1" height="1" fill="#b8fff4"/>
+  <rect x="5" y="15" width="1" height="1" fill="#ffffff"/>
+  <rect x="16" y="17" width="1" height="1" fill="#b8fff4"/>
+  <rect x="4" y="8" width="1" height="1" fill="#ffffff"/>
+
+  <!-- Radar outer frame -->
+  <rect x="2" y="2" width="16" height="1" fill="#3fe0d0"/>
+  <rect x="2" y="17" width="16" height="1" fill="#3fe0d0"/>
+  <rect x="2" y="3" width="1" height="14" fill="#3fe0d0"/>
+  <rect x="17" y="3" width="1" height="14" fill="#3fe0d0"/>
+
+  <!-- Radar inner ring -->
+  <rect x="5" y="5" width="10" height="1" fill="#3fe0d0"/>
+  <rect x="5" y="14" width="10" height="1" fill="#3fe0d0"/>
+  <rect x="5" y="6" width="1" height="8" fill="#3fe0d0"/>
+  <rect x="14" y="6" width="1" height="8" fill="#3fe0d0"/>
+
+  <!-- Center core -->
+  <rect x="8" y="8" width="4" height="4" fill="#3fe0d0"/>
+  <rect x="9" y="9" width="2" height="2" fill="#eafffb"/>
+
+  <!-- Pink crosshair ticks -->
+  <rect x="9" y="0" width="2" height="2" fill="#ff5c9d"/>
+  <rect x="9" y="18" width="2" height="2" fill="#ff5c9d"/>
+  <rect x="0" y="9" width="2" height="2" fill="#ff5c9d"/>
+  <rect x="18" y="9" width="2" height="2" fill="#ff5c9d"/>
+
+  <!-- Glowing yellow blip (the detected drop) -->
+  <rect x="14" y="4" width="2" height="2" fill="#ffe14d"/>
+  <rect x="14" y="4" width="1" height="1" fill="#fffce0"/>
+</svg>
