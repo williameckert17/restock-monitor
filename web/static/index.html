@@ -640,51 +640,32 @@ hr { border: none; border-top: 2px solid var(--gb-border); margin: 22px 0; }
 <section id="tab-notify">
   <div class="sec-head"><h2>NOTIFICATION CENTER</h2></div>
 
-  <!-- Twilio status card -->
-  <div class="settings-card" style="margin-bottom:22px">
+  <!-- Discord status -->
+  <div class="settings-card" style="margin-bottom:18px">
+    <h3>DISCORD WEBHOOK</h3>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-      <div id="twilio-dot" class="dot"></div>
-      <span id="twilio-label" style="font-family:var(--px);font-size:8px">CHECKING…</span>
+      <div id="discord-dot" class="dot"></div>
+      <span id="discord-label" style="font-family:var(--px);font-size:8px">CHECKING…</span>
     </div>
     <p class="desc">
-      Twilio sends the texts. Add your Account SID, Auth Token, and
-      From number in <strong>Settings → .env</strong>, then enter recipient
-      numbers below and flip SMS on.
+      Paste your Discord channel webhook URL. Restock alerts will appear as
+      rich embeds with the product name, price, and link.
     </p>
-  </div>
-
-  <!-- SMS master toggle -->
-  <div style="display:flex;align-items:center;gap:18px;margin-bottom:26px">
-    <span style="font-family:var(--px);font-size:9px;color:var(--gb-dim)">SMS ALERTS</span>
-    <button id="sms-toggle" class="btn" onclick="toggleSMS()">OFF</button>
-  </div>
-
-  <!-- Recipients -->
-  <p class="sub-label">— RECIPIENTS —</p>
-  <div id="recipient-list" style="margin-bottom:14px"></div>
-
-  <!-- Add number -->
-  <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:26px;flex-wrap:wrap">
-    <div class="fg" style="flex:1;min-width:180px;max-width:260px">
-      <label>PHONE NUMBER (E.164)</label>
-      <input id="new-number" placeholder="+12125551234" maxlength="16"
-             onkeydown="if(event.key==='Enter')addRecipient()">
+    <div class="fg" style="margin-bottom:12px">
+      <label>WEBHOOK URL</label>
+      <input id="discord-input" type="password" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false">
     </div>
-    <button class="btn green" onclick="addRecipient()">+ ADD</button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn green" onclick="saveDiscord()">SAVE WEBHOOK</button>
+      <button class="btn" onclick="testDiscord()">SEND TEST ALERT</button>
+    </div>
   </div>
-
-  <!-- Test button -->
-  <button class="btn" onclick="testSMS()">SEND TEST TEXT</button>
-  <p class="desc" style="margin-top:10px">
-    Sends a test message to every number in the list above.
-    Requires Twilio credentials and at least one recipient.
-  </p>
 </section>
 
 <!-- ══════════════════ SETTINGS ══════════════════ -->
 <section id="tab-settings">
   <div class="sec-head"><h2>SETTINGS</h2></div>
-  <div class="settings-card">
+  <div class="settings-card" style="margin-bottom:18px">
     <h3>BEST BUY API KEY</h3>
     <p class="desc">
       Required for Best Buy API monitoring. Saved to your local
@@ -699,6 +680,24 @@ hr { border: none; border-top: 2px solid var(--gb-border); margin: 22px 0; }
     <div class="key-row">
       <span class="dot" id="key-dot"></span>
       <span id="key-label">—</span>
+    </div>
+  </div>
+
+  <div class="settings-card">
+    <h3>PUSHOVER</h3>
+    <p class="desc">Optional. Mobile push notifications via Pushover. Requires both an App Token and User Key.</p>
+    <div class="fg" style="margin-bottom:8px">
+      <label>APP TOKEN</label>
+      <input id="pushover-token-input" type="password" placeholder="a••••••••••••••••••••••••••••••" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="fg" style="margin-bottom:8px">
+      <label>USER KEY</label>
+      <input id="pushover-user-input" type="password" placeholder="u••••••••••••••••••••••••••••••" autocomplete="off" spellcheck="false">
+    </div>
+    <button class="btn green" style="margin-top:4px" onclick="savePushover()">SAVE PUSHOVER CREDS</button>
+    <div class="key-row" style="margin-top:10px">
+      <span class="dot" id="pushover-dot"></span>
+      <span id="pushover-label">—</span>
     </div>
   </div>
 </section>
@@ -1093,18 +1092,68 @@ async function toggleEnabled(id, newVal) {
 }
 
 // ─── Settings ─────────────────────────────────────────
+function _setDot(dotId, labelId, set, onLabel, offLabel) {
+  document.getElementById(dotId).className = 'dot'+(set?' set':'');
+  document.getElementById(labelId).textContent = set ? onLabel : offLabel;
+}
+function applySettings(d) {
+  _setDot('key-dot',          'key-label',          d.bby_key_set,    'KEY CONFIGURED',   'NO KEY SET');
+  _setDot('twilio-sid-dot',   'twilio-sid-label',   d.twilio_sid_set, 'ACCOUNT SID SET',  'ACCOUNT SID NOT SET');
+  _setDot('twilio-token-dot', 'twilio-token-label', d.twilio_token_set,'AUTH TOKEN SET',  'AUTH TOKEN NOT SET');
+  _setDot('twilio-from-dot',  'twilio-from-label',  d.twilio_from_set,'FROM NUMBER SET',  'FROM NUMBER NOT SET');
+  _setDot('discord-dot',      'discord-label',      d.discord_set,    'WEBHOOK CONFIGURED','NO WEBHOOK SET');
+  _setDot('pushover-dot',     'pushover-label',     d.pushover_set,   'PUSHOVER CONFIGURED','PUSHOVER NOT SET');
+}
 async function saveKey() {
   const val=document.getElementById('bby-input').value.trim();
   if(!val){toast('ENTER A KEY FIRST');return;}
   try {
     const d=await api('POST','/api/settings',{bby_api_key:val});
     document.getElementById('bby-input').value='';
-    setKeyStatus(d.bby_key_set); toast('KEY SAVED TO .ENV');
+    applySettings(d); toast('KEY SAVED TO .ENV');
   } catch(e){toast('ERROR: '+e.message);}
 }
-function setKeyStatus(set) {
-  document.getElementById('key-dot').className  = 'dot'+(set?' set':'');
-  document.getElementById('key-label').textContent = set ? 'KEY CONFIGURED' : 'NO KEY SET';
+async function saveTwilio() {
+  const sid=document.getElementById('twilio-sid-input').value.trim();
+  const tok=document.getElementById('twilio-token-input').value.trim();
+  const frm=document.getElementById('twilio-from-input').value.trim();
+  if(!sid&&!tok&&!frm){toast('FILL IN AT LEAST ONE FIELD');return;}
+  try {
+    const body={};
+    if(sid) body.twilio_account_sid=sid;
+    if(tok) body.twilio_auth_token=tok;
+    if(frm) body.twilio_from=frm;
+    const d=await api('POST','/api/settings',body);
+    document.getElementById('twilio-sid-input').value='';
+    document.getElementById('twilio-token-input').value='';
+    document.getElementById('twilio-from-input').value='';
+    applySettings(d);
+    loadNotifications(); // refresh twilio_ready dot in Notify tab
+    toast('TWILIO CREDS SAVED');
+  } catch(e){toast('ERROR: '+e.message);}
+}
+async function saveDiscord() {
+  const val=document.getElementById('discord-input').value.trim();
+  if(!val){toast('ENTER A WEBHOOK URL');return;}
+  try {
+    const d=await api('POST','/api/settings',{discord_webhook_url:val});
+    document.getElementById('discord-input').value='';
+    applySettings(d); toast('WEBHOOK SAVED');
+  } catch(e){toast('ERROR: '+e.message);}
+}
+async function savePushover() {
+  const tok=document.getElementById('pushover-token-input').value.trim();
+  const usr=document.getElementById('pushover-user-input').value.trim();
+  if(!tok&&!usr){toast('FILL IN AT LEAST ONE FIELD');return;}
+  try {
+    const body={};
+    if(tok) body.pushover_app_token=tok;
+    if(usr) body.pushover_user_key=usr;
+    const d=await api('POST','/api/settings',body);
+    document.getElementById('pushover-token-input').value='';
+    document.getElementById('pushover-user-input').value='';
+    applySettings(d); toast('PUSHOVER CREDS SAVED');
+  } catch(e){toast('ERROR: '+e.message);}
 }
 
 // ─── Load initial state ───────────────────────────────
@@ -1118,63 +1167,17 @@ async function loadStatus() {
 }
 async function loadAlerts()    { try{ localAlerts=await api('GET','/api/alerts'); renderAlerts(); }catch(_){} }
 async function loadWatchlist() { try{ watchlistItems=await api('GET','/api/watchlist'); renderWatchlist(); }catch(_){} }
-async function loadSettings()  { try{ const d=await api('GET','/api/settings'); setKeyStatus(d.bby_key_set); }catch(_){} }
+async function loadSettings()  { try{ const d=await api('GET','/api/settings'); applySettings(d); }catch(_){} }
 
 // ─── Notification Center ──────────────────────────────
-let NC = { sms_enabled: false, recipients: [], twilio_ready: false };
-
 async function loadNotifications() {
-  try { NC = await api('GET','/api/notifications'); renderNC(); } catch(_){}
+  // Discord status comes from /api/settings (same as applySettings)
+  try { const d=await api('GET','/api/settings'); applySettings(d); } catch(_){}
 }
-function renderNC() {
-  document.getElementById('twilio-dot').className = 'dot'+(NC.twilio_ready?' set':'');
-  document.getElementById('twilio-label').textContent = NC.twilio_ready
-    ? 'TWILIO CONFIGURED' : 'TWILIO NOT SET — ADD CREDENTIALS IN SETTINGS';
-  const btn = document.getElementById('sms-toggle');
-  btn.textContent = NC.sms_enabled ? 'ON' : 'OFF';
-  btn.className   = 'btn'+(NC.sms_enabled?' green':'');
-  const list = document.getElementById('recipient-list');
-  if (!NC.recipients.length) {
-    list.innerHTML = '<p style="color:var(--gb-dim);font-size:11px;margin-bottom:6px">No numbers yet.</p>';
-  } else {
-    list.innerHTML = NC.recipients.map(n=>`
-      <div class="wl-card" style="margin-bottom:8px">
-        <div style="flex:1;font-size:13px">${esc(n)}</div>
-        <button class="btn red" style="font-size:7px;padding:5px 10px"
-          onclick="removeRecipient('${esc(n)}')">REMOVE</button>
-      </div>`).join('');
-  }
-}
-async function _saveNC(patch) {
-  NC = await api('POST','/api/notifications',{...NC,...patch}); renderNC();
-}
-async function toggleSMS() {
-  try { await _saveNC({sms_enabled:!NC.sms_enabled}); }
-  catch(e){toast('ERROR: '+e.message);}
-}
-async function addRecipient() {
-  const num = document.getElementById('new-number').value.trim();
-  if (!num)              { toast('ENTER A NUMBER'); return; }
-  if (!num.startsWith('+')) { toast('USE E.164 FORMAT  e.g. +12125551234'); return; }
-  if (NC.recipients.includes(num)) { toast('ALREADY IN LIST'); return; }
+async function testDiscord() {
   try {
-    await _saveNC({recipients:[...NC.recipients, num]});
-    document.getElementById('new-number').value='';
-    toast(num+' ADDED');
-  } catch(e){toast('ERROR: '+e.message);}
-}
-async function removeRecipient(num) {
-  try {
-    await _saveNC({recipients:NC.recipients.filter(n=>n!==num)});
-    toast(num+' REMOVED');
-  } catch(e){toast('ERROR: '+e.message);}
-}
-async function testSMS() {
-  if (!NC.twilio_ready)     { toast('CONFIGURE TWILIO FIRST — SEE SETTINGS'); return; }
-  if (!NC.recipients.length){ toast('ADD A NUMBER FIRST'); return; }
-  try {
-    const r = await api('POST','/api/notifications/test');
-    toast('TEST SENT: '+r.sent+' OK / '+r.failed+' FAILED');
+    const r = await api('POST','/api/discord/test');
+    toast('TEST ALERT SENT TO DISCORD');
   } catch(e){toast('ERROR: '+e.message);}
 }
 

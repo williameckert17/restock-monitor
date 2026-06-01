@@ -242,25 +242,78 @@ async def test_notifications():
     return {"sent": sent, "failed": failed}
 
 
+# ── Discord test ─────────────────────────────────────────────────────────────
+
+@app.post("/api/discord/test")
+async def test_discord():
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
+    if not webhook_url:
+        raise HTTPException(400, "Discord webhook not configured — save a webhook URL in Notification Center first")
+    import httpx as _httpx
+    payload = {
+        "embeds": [{
+            "title": "\U0001f514 Test alert from Pokepad",
+            "description": "Discord alerts are working! You'll get a message like this when an item restocks.",
+            "color": 0x00CC44,
+            "footer": {"text": "restock-monitor"},
+        }]
+    }
+    async with _httpx.AsyncClient(timeout=10) as client:
+        r = await client.post(webhook_url, json=payload)
+        r.raise_for_status()
+    return {"ok": True}
+
+
 # ── Settings ─────────────────────────────────────────────────────────────────
+
+_TWILIO_KEYS = ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM")
 
 class SettingsIn(BaseModel):
     bby_api_key: Optional[str] = None
+    twilio_account_sid: Optional[str] = None
+    twilio_auth_token: Optional[str] = None
+    twilio_from: Optional[str] = None
+    discord_webhook_url: Optional[str] = None
+    pushover_app_token: Optional[str] = None
+    pushover_user_key: Optional[str] = None
+
+
+def _cred_set(env_key: str) -> bool:
+    return bool(os.getenv(env_key, ""))
 
 
 @app.get("/api/settings")
 def get_settings():
-    return {"bby_key_set": bool(os.getenv("BBY_API_KEY", ""))}
+    return {
+        "bby_key_set": _cred_set("BBY_API_KEY"),
+        "twilio_sid_set": _cred_set("TWILIO_ACCOUNT_SID"),
+        "twilio_token_set": _cred_set("TWILIO_AUTH_TOKEN"),
+        "twilio_from_set": _cred_set("TWILIO_FROM"),
+        "discord_set": _cred_set("DISCORD_WEBHOOK_URL"),
+        "pushover_set": _cred_set("PUSHOVER_APP_TOKEN") and _cred_set("PUSHOVER_USER_KEY"),
+    }
 
 
 @app.post("/api/settings")
 def save_settings(body: SettingsIn):
-    if body.bby_api_key is not None:
-        from dotenv import set_key
-        APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
-        set_key(str(ENV_PATH), "BBY_API_KEY", body.bby_api_key)
-        os.environ["BBY_API_KEY"] = body.bby_api_key
-    return {"bby_key_set": bool(os.getenv("BBY_API_KEY", ""))}
+    from dotenv import set_key
+    APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    pairs = [
+        ("BBY_API_KEY",          body.bby_api_key),
+        ("TWILIO_ACCOUNT_SID",   body.twilio_account_sid),
+        ("TWILIO_AUTH_TOKEN",    body.twilio_auth_token),
+        ("TWILIO_FROM",          body.twilio_from),
+        ("DISCORD_WEBHOOK_URL",  body.discord_webhook_url),
+        ("PUSHOVER_APP_TOKEN",   body.pushover_app_token),
+        ("PUSHOVER_USER_KEY",    body.pushover_user_key),
+    ]
+    for env_key, val in pairs:
+        if val is not None:
+            set_key(str(ENV_PATH), env_key, val)
+            os.environ[env_key] = val
+
+    return get_settings()
 
 
 # ── Static files ─────────────────────────────────────────────────────────────
