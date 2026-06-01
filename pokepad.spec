@@ -14,7 +14,7 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 block_cipher = None
 
 a = Analysis(
-    ["serve.py"],
+    ["desktop.py"],
     pathex=[],
     binaries=[],
     datas=[
@@ -35,6 +35,8 @@ a = Analysis(
         # FastAPI / Starlette templates and schema files
         *collect_data_files("fastapi"),
         *collect_data_files("starlette"),
+        # pywebview bundled HTML/JS assets
+        *collect_data_files("webview"),
     ],
     hiddenimports=[
         # uvicorn internals
@@ -68,6 +70,12 @@ a = Analysis(
         # Email stdlib (used by notifier.py SMTP channel)
         "email.mime.text",
         "email.mime.multipart",
+        # pywebview platform backends
+        "webview",
+        "webview.platforms.cocoa",
+        "webview.platforms.gtk",
+        "webview.platforms.winforms",
+        "webview.platforms.edgechromium",
     ],
     hookspath=[],
     hooksconfig={},

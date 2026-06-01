@@ -43,6 +43,20 @@ cp sites/bestbuy_example.toml sites/bestbuy.toml
 
 ### 4. Run
 
+**Web dashboard** (browser):
+```bash
+python serve.py
+# open http://localhost:8000
+```
+
+**Desktop app** (native window via pywebview):
+```bash
+pip install pywebview   # one-time
+python desktop.py
+```
+Opens a native window on a free localhost port. Closing the window shuts the server cleanly.
+
+**CLI monitor only** (no dashboard):
 ```bash
 python monitor.py
 ```
