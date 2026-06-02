@@ -108,8 +108,29 @@ def get_watchlist():
 
 
 @app.post("/api/watchlist", status_code=201)
-def add_watchlist(entry: WatchlistEntry):
-    return store.add_site(entry.model_dump())
+async def add_watchlist(entry: WatchlistEntry):
+    saved = store.add_site(entry.model_dump())
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
+    if webhook_url:
+        import httpx as _httpx
+        payload = {
+            "embeds": [{
+                "title": "\U0001f4cb Now tracking: " + entry.product_name,
+                "url": entry.url,
+                "color": 0x5865F2,
+                "fields": [
+                    {"name": "Retailer", "value": entry.name, "inline": True},
+                    {"name": "Source", "value": entry.source, "inline": True},
+                ],
+                "footer": {"text": "restock-monitor — added to watchlist"},
+            }]
+        }
+        try:
+            async with _httpx.AsyncClient(timeout=5) as client:
+                await client.post(webhook_url, json=payload)
+        except Exception:
+            pass
+    return saved
 
 
 @app.put("/api/watchlist/{site_id}")
