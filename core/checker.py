@@ -46,6 +46,8 @@ def _match(value: str, pattern: str, match_type: str) -> bool:
 # ── Stock checkers ────────────────────────────────────────────────────────────
 
 def _check_css(html: str, check: StockCheck) -> StockStatus:
+    from core import preorder_detect as pd
+
     if not check.selector:
         return StockStatus.UNKNOWN
     nodes = HTMLParser(html).css(check.selector)
@@ -57,6 +59,14 @@ def _check_css(html: str, check: StockCheck) -> StockStatus:
         if check.attribute
         else " ".join(n.text(strip=True) for n in nodes)
     )
+
+    # Pre-order detection runs before configured patterns so a "Pre-Order"
+    # button is never misclassified as simply out-of-stock.
+    pd_state = pd.classify({"listed": True, "buy_text": text})
+    if pd_state == pd.PREORDER:
+        return StockStatus.PREORDER
+    if pd_state == pd.COMING_SOON and not check.in_stock_text and not check.out_of_stock_text:
+        return StockStatus.COMING_SOON
 
     if check.in_stock_text:
         return StockStatus.IN_STOCK if _match(text, check.in_stock_text, check.match_type) else StockStatus.OUT_OF_STOCK

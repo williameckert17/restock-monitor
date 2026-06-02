@@ -77,11 +77,12 @@ def _price_str(price: Optional[str]) -> str:
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
-async def notify(config: SiteConfig, price: Optional[str] = None) -> None:
-    """Called exactly once per OUT_OF_STOCK → IN_STOCK transition."""
+async def notify(config: SiteConfig, price: Optional[str] = None, label: str = "IN STOCK") -> None:
+    """Called exactly once per transition into an orderable state."""
     log.info(
-        "[%s] *** RESTOCK *** %s%s  →  %s",
+        "[%s] *** %s *** %s%s  →  %s",
         config.name,
+        label,
         config.product_name,
         _price_str(price),
         config.url,
@@ -91,7 +92,7 @@ async def notify(config: SiteConfig, price: Optional[str] = None) -> None:
     tasks = []
 
     if "discord" in channels:
-        tasks.append(_send_discord(config, price))
+        tasks.append(_send_discord(config, price, label))
     if "pushover" in channels:
         tasks.append(_send_pushover(config, price))
 
@@ -124,7 +125,7 @@ async def notify(config: SiteConfig, price: Optional[str] = None) -> None:
 
 # ── Discord ───────────────────────────────────────────────────────────────────
 
-async def _send_discord(config: SiteConfig, price: Optional[str]) -> None:
+async def _send_discord(config: SiteConfig, price: Optional[str], label: str = "IN STOCK") -> None:
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
     if not webhook_url:
         log.warning("[%s] discord channel active but DISCORD_WEBHOOK_URL not set", config.name)
@@ -137,7 +138,7 @@ async def _send_discord(config: SiteConfig, price: Optional[str]) -> None:
     payload = {
         "embeds": [
             {
-                "title": f"\U0001f514 Back in stock: {config.product_name}",
+                "title": f"\U0001f514 {label}: {config.product_name}",
                 "url": config.url,
                 "color": _DISCORD_GREEN,
                 "fields": fields,

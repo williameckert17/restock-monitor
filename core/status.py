@@ -35,6 +35,8 @@ _RED    = "\033[31m"
 _STATUS_FMT: Dict[StockStatus, Tuple[str, str]] = {
     StockStatus.IN_STOCK:     (_GREEN,  "In Stock"),
     StockStatus.OUT_OF_STOCK: (_DIM,    "Out of Stock"),
+    StockStatus.PREORDER:     (_GREEN,  "Pre-Order Open"),
+    StockStatus.COMING_SOON:  (_YELLOW, "Coming Soon"),
     StockStatus.BLOCKED:      (_YELLOW, "Blocked"),
     StockStatus.ERROR:        (_RED,    "Error"),
     StockStatus.UNKNOWN:      ("",      "Unknown"),

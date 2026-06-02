@@ -6,6 +6,8 @@ from typing import Dict, Literal, Optional
 class StockStatus(Enum):
     IN_STOCK = auto()
     OUT_OF_STOCK = auto()
+    PREORDER = auto()       # orderable as pre-order -> fires alert
+    COMING_SOON = auto()    # listed but not yet orderable
     BLOCKED = auto()
     ERROR = auto()
     UNKNOWN = auto()

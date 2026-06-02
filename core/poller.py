@@ -10,6 +10,7 @@ from core.checker import check_stock, check_stock_bestbuy
 from core.models import SiteConfig, StockStatus
 from core.notifier import notify
 from core.status import StatusBoard
+from core import preorder_detect as pd
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +23,17 @@ _USER_AGENT = os.getenv(
 _REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "15"))
 _MAX_BACKOFF = 600  # 10 minutes, caps the exponential series
 
-_DEFINITIVE = {StockStatus.IN_STOCK, StockStatus.OUT_OF_STOCK}
+_DEFINITIVE = {StockStatus.IN_STOCK, StockStatus.OUT_OF_STOCK, StockStatus.PREORDER, StockStatus.COMING_SOON}
+
+def _to_pd_state(status: Optional[StockStatus]) -> Optional[str]:
+    return {
+        StockStatus.IN_STOCK:     pd.IN_STOCK,
+        StockStatus.PREORDER:     pd.PREORDER,
+        StockStatus.OUT_OF_STOCK: pd.OUT_OF_STOCK,
+        StockStatus.COMING_SOON:  pd.COMING_SOON,
+        StockStatus.UNKNOWN:      pd.COMING_SOON,
+        StockStatus.BLOCKED:      pd.BLOCKED,
+    }.get(status)  # type: ignore[arg-type]
 
 
 async def run_site(config: SiteConfig, board: StatusBoard) -> None:
@@ -62,12 +73,15 @@ async def run_site(config: SiteConfig, board: StatusBoard) -> None:
                 )
                 last_status = status
 
-            # Alert only on a confirmed OUT_OF_STOCK → IN_STOCK transition.
-            # Transitions from UNKNOWN/BLOCKED/ERROR into IN_STOCK are ignored so
-            # a fresh start or a temporary block doesn't fire spurious alerts.
-            restock_fired = (status == StockStatus.IN_STOCK and last_definitive == StockStatus.OUT_OF_STOCK)
+            # Alert when transitioning into an orderable state (IN_STOCK or PREORDER)
+            # from a non-orderable one. Ignores BLOCKED/ERROR/fresh-start so we
+            # never fire spurious alerts.
+            current_pd = _to_pd_state(status)
+            prev_pd    = _to_pd_state(last_definitive)
+            restock_fired = bool(current_pd and pd.should_alert(prev_pd, current_pd))
             if restock_fired:
-                await notify(config, price=result.price)
+                label = pd.alert_label(current_pd)
+                await notify(config, price=result.price, label=label)
 
             if status in _DEFINITIVE:
                 last_definitive = status
