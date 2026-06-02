@@ -1093,16 +1093,15 @@ async function toggleEnabled(id, newVal) {
 
 // ─── Settings ─────────────────────────────────────────
 function _setDot(dotId, labelId, set, onLabel, offLabel) {
-  document.getElementById(dotId).className = 'dot'+(set?' set':'');
-  document.getElementById(labelId).textContent = set ? onLabel : offLabel;
+  const dot = document.getElementById(dotId);
+  const lbl = document.getElementById(labelId);
+  if (dot) dot.className = 'dot'+(set?' set':'');
+  if (lbl) lbl.textContent = set ? onLabel : offLabel;
 }
 function applySettings(d) {
-  _setDot('key-dot',          'key-label',          d.bby_key_set,    'KEY CONFIGURED',   'NO KEY SET');
-  _setDot('twilio-sid-dot',   'twilio-sid-label',   d.twilio_sid_set, 'ACCOUNT SID SET',  'ACCOUNT SID NOT SET');
-  _setDot('twilio-token-dot', 'twilio-token-label', d.twilio_token_set,'AUTH TOKEN SET',  'AUTH TOKEN NOT SET');
-  _setDot('twilio-from-dot',  'twilio-from-label',  d.twilio_from_set,'FROM NUMBER SET',  'FROM NUMBER NOT SET');
-  _setDot('discord-dot',      'discord-label',      d.discord_set,    'WEBHOOK CONFIGURED','NO WEBHOOK SET');
-  _setDot('pushover-dot',     'pushover-label',     d.pushover_set,   'PUSHOVER CONFIGURED','PUSHOVER NOT SET');
+  _setDot('key-dot',      'key-label',      d.bby_key_set,  'KEY CONFIGURED',      'NO KEY SET');
+  _setDot('discord-dot',  'discord-label',  d.discord_set,  'WEBHOOK CONFIGURED',  'NO WEBHOOK SET');
+  _setDot('pushover-dot', 'pushover-label', d.pushover_set, 'PUSHOVER CONFIGURED', 'PUSHOVER NOT SET');
 }
 async function saveKey() {
   const val=document.getElementById('bby-input').value.trim();
