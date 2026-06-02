@@ -824,12 +824,14 @@ function syncHeader() {
 
 // ─── Status table ─────────────────────────────────────
 const BADGE = {
-  IN_STOCK:     ['b-in',    'IN STOCK'],
-  OUT_OF_STOCK: ['b-out',   'OUT'],
-  BLOCKED:      ['b-blocked','BLOCKED'],
-  ERROR:        ['b-error', 'ERROR'],
-  AWAITING_KEY: ['b-await', 'AWAITING KEY'],
-  UNKNOWN:      ['b-unknown','UNKNOWN'],
+  IN_STOCK:     ['b-in',      'IN STOCK'],
+  PREORDER:     ['b-in',      'PRE-ORDER'],
+  COMING_SOON:  ['b-await',   'COMING SOON'],
+  OUT_OF_STOCK: ['b-out',     'OUT'],
+  BLOCKED:      ['b-blocked', 'BLOCKED'],
+  ERROR:        ['b-error',   'ERROR'],
+  AWAITING_KEY: ['b-await',   'AWAITING KEY'],
+  UNKNOWN:      ['b-unknown', 'UNKNOWN'],
 };
 function badge(status) {
   const [cls, label] = BADGE[status] || ['b-unknown', status || '—'];
@@ -859,6 +861,7 @@ function upsertSite(data) {
   const prev = S.sites[data.name] || {};
   S.sites[data.name] = { ...prev, ...data, is_demo: prev.is_demo ?? (S.demo && !S.running) };
   renderTable();
+  renderWatchlist();
   updatePanelSprite();
 }
 
@@ -963,10 +966,14 @@ function renderWatchlist() {
     const typeBadge = w.check_type==='category'
       ? '<span class="badge badge-cat">CATEGORY</span>'
       : '<span class="badge badge-prod">PRODUCT</span>';
+    const site = S.sites[w.name];
+    const statusBadge = (S.running || S.demo) && site ? badge(site.status) : '';
     return `
     <div class="wl-card${on?'':' wl-disabled'}">
       <div style="flex:1;min-width:0">
-        <div class="wl-name">${esc(w.product_name)}</div>
+        <div class="wl-name" style="display:flex;align-items:center;gap:8px">
+          ${esc(w.product_name)}${statusBadge}
+        </div>
         <div class="wl-meta">
           <span>${esc(w.name)}</span>${srcBadge}${typeBadge}
           <span>${w.poll_interval}s</span>
